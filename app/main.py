@@ -1,5 +1,7 @@
 from fastapi import APIRouter, FastAPI
 
+from app.routers import auth  # Importar router de auth
+
 app = FastAPI(
     title="API Créditos PyMEs",
     description="API para gestión de créditos a pequeñas y medianas empresas",
@@ -25,4 +27,5 @@ async def health_check():
 
 # API v1
 api_v1_router = APIRouter(prefix="/api/v1")
+api_v1_router.include_router(auth.router)  # Agregar router de auth
 app.include_router(api_v1_router)
