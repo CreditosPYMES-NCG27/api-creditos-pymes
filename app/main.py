@@ -1,8 +1,28 @@
-from fastapi import FastAPI
+from fastapi import APIRouter, FastAPI
 
-app = FastAPI()
+app = FastAPI(
+    title="API Créditos PyMEs",
+    description="API para gestión de créditos a pequeñas y medianas empresas",
+    version="0.1.0",
+)
 
 
-@app.get("/")
-async def root():
-    return {"message": "FastAPI is running!"}
+@app.get("/", tags=["root"])
+async def read_root():
+    """Endpoint raíz para verificar que la API está funcionando."""
+    return {
+        "name": app.title,
+        "version": app.version,
+        "docs": "/docs",
+    }
+
+
+@app.get("/health", tags=["health"])
+async def health_check():
+    """Endpoint para verificar la salud de la API."""
+    return {"status": "healthy"}
+
+
+# API v1
+api_v1_router = APIRouter(prefix="/api/v1")
+app.include_router(api_v1_router)
