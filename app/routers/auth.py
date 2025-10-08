@@ -1,7 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+)
 from supabase import AsyncClient
 
-from app.dependencies import supabase_for_user
+from app.dependencies import (
+    get_current_user_id,
+    supabase_for_user,
+)
 from app.models.user import UserWithCompany
 from app.services.user_service import UserService
 
@@ -10,21 +17,26 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.get("/me", response_model=UserWithCompany)
 async def get_current_user(
+    user_id: str = Depends(get_current_user_id),
     supa: AsyncClient = Depends(supabase_for_user),
 ):
     """
-    Obtener información extendida del usuario autenticado.
+    Obtener perfil completo del usuario autenticado.
 
-    Este endpoint:
-    - Valida el JWT token automáticamente (supabase_for_user)
-    - Obtiene el user_id del contexto JWT (get_current_user_id)
-    - Consulta datos del usuario desde la BD a través del servicio
-    - Incluye información básica de la empresa si existe
+    :param user_id: ID del usuario autenticado extraído del token JWT
+    :param supa: Cliente de Supabase autenticado con el token JWT
+    :return: Perfil completo del usuario autenticado
+    :rtype: UserWithCompany
+    :raise HTTPException: Si el usuario no es encontrado
     """
+
     service = UserService(supa)
     profile = await service.get_current_user_profile()
 
     if not profile:
-        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Usuario {user_id} autenticado pero no encontrado en la base de datos",
+        )
 
     return profile
