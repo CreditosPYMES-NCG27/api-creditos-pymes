@@ -1,6 +1,6 @@
 from fastapi import APIRouter, FastAPI
 
-from app.routers import profiles
+from app.routers import companies, profiles
 
 app = FastAPI(
     title="API Créditos PyMEs",
@@ -27,5 +27,6 @@ async def health_check():
 
 # API v1
 api_v1_router = APIRouter(prefix="/api/v1")
-api_v1_router.include_router(profiles.router)  # Agregar router de profiles
+api_v1_router.include_router(profiles.router)
+api_v1_router.include_router(companies.router)
 app.include_router(api_v1_router)
