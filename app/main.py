@@ -1,6 +1,6 @@
 from fastapi import APIRouter, FastAPI
 
-from app.routers import companies, credit_applications, profiles
+from app.routers import companies, credit_applications, metadata, profiles
 
 app = FastAPI(
     title="API Créditos PyMEs",
@@ -30,4 +30,5 @@ api_v1_router = APIRouter(prefix="/api/v1")
 api_v1_router.include_router(profiles.router)
 api_v1_router.include_router(companies.router)
 api_v1_router.include_router(credit_applications.router)
+api_v1_router.include_router(metadata.router)
 app.include_router(api_v1_router)

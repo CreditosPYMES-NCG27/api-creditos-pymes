@@ -62,14 +62,27 @@ api-creditos-pymes/
 │   ├── main.py              # Punto de entrada de la aplicación
 │   ├── config.py            # Configuración y variables de entorno
 │   ├── dependencies.py      # Dependencias compartidas (auth, Supabase)
-│   ├── models/              # Modelos Pydantic (schemas)
-│   │   └── user.py
-│   ├── repositories/        # Acceso a datos
-│   │   └── user_repository.py
+│   ├── schemas/             # Modelos Pydantic (esquemas de datos)
+│   │   ├── company.py
+│   │   ├── credit_application.py
+│   │   ├── profile.py
+│   │   └── __init__.py
+│   ├── repositories/        # Acceso a datos (Supabase)
+│   │   ├── companies_repository.py
+│   │   ├── credit_applications_repository.py
+│   │   ├── profiles_repository.py
+│   │   └── __init__.py
 │   ├── routers/             # Endpoints por módulo
-│   │   └── auth.py
+│   │   ├── companies.py
+│   │   ├── credit_applications.py
+│   │   ├── metadata.py
+│   │   ├── profiles.py
+│   │   └── __init__.py
 │   └── services/            # Lógica de negocio
-│       └── user_service.py
+│       ├── company_service.py
+│       ├── credit_application_service.py
+│       ├── profile_service.py
+│       └── __init__.py
 ├── .env                     # Variables de entorno (no incluir en git)
 ├── .env.example             # Plantilla de variables de entorno
 ├── pyproject.toml           # Configuración del proyecto
@@ -80,22 +93,47 @@ api-creditos-pymes/
 
 ### Raíz y Health Check
 
-| Método | Endpoint  | Descripción                 |
-| ------ | --------- | --------------------------- |
-| GET    | `/`       | Estado de la API            |
-| GET    | `/health` | Health check de la API      |
+| Método | Endpoint       | Descripción                 |
+| ------ | -------------- | --------------------------- |
+| GET    | `/`            | Estado de la API            |
+| GET    | `/health`      | Health check de la API      |
 
-### Autenticación
+### Perfiles (Auth)
 
-| Método | Endpoint       | Descripción                              |
-| ------ | -------------- | ---------------------------------------- |
-| GET    | `/api/v1/auth/me` | Obtener perfil del usuario autenticado |
+| Método | Endpoint              | Descripción                              |
+| ------ | --------------------- | ---------------------------------------- |
+| GET    | `/api/v1/profiles/me` | Obtener perfil del usuario autenticado   |
+
+### Compañías
+
+| Método | Endpoint                    | Descripción                              |
+| ------ | --------------------------- | ---------------------------------------- |
+| GET    | `/api/v1/companies/`        | Listar compañías (con filtros y paginación) |
+| POST   | `/api/v1/companies/`        | Crear nueva compañía                    |
+| GET    | `/api/v1/companies/{id}`    | Obtener compañía por ID                 |
+| PUT    | `/api/v1/companies/{id}`    | Actualizar compañía                     |
+| GET    | `/api/v1/companies/me`      | Obtener compañía del usuario autenticado |
+
+### Aplicaciones de Crédito
+
+| Método | Endpoint                              | Descripción                              |
+| ------ | ------------------------------------- | ---------------------------------------- |
+| GET    | `/api/v1/credit-applications/`        | Listar aplicaciones de crédito (con filtros y paginación) |
+| POST   | `/api/v1/credit-applications/`        | Crear nueva aplicación de crédito       |
+| GET    | `/api/v1/credit-applications/{id}`    | Obtener aplicación por ID               |
+| PUT    | `/api/v1/credit-applications/{id}`    | Actualizar aplicación                   |
+
+### Metadatos
+
+| Método | Endpoint                          | Descripción                              |
+| ------ | --------------------------------- | ---------------------------------------- |
+| GET    | `/api/v1/metadata/credit-purposes`| Listar propósitos válidos de crédito     |
 
 ## 🔐 Autenticación
 
 Esta API utiliza **Supabase Auth** para autenticación:
 
-- Los usuarios se registran y autentican directamente contra Supabase
+- Los usuarios se registran y autentican directamente con Supabase Auth
 - La API valida tokens JWT en cada request
 - Todos los endpoints protegidos requieren header `Authorization: Bearer {JWT_TOKEN}`
 
@@ -103,7 +141,7 @@ Esta API utiliza **Supabase Auth** para autenticación:
 
 ```bash
 curl -H "Authorization: Bearer eyJ0eXAiOiJKV1..." \
-  http://localhost:8000/api/v1/auth/me
+  http://localhost:8000/api/v1/profiles/me
 ```
 
 ## 🗄️ Base de Datos
@@ -111,27 +149,10 @@ curl -H "Authorization: Bearer eyJ0eXAiOiJKV1..." \
 La API utiliza **Supabase (PostgreSQL)** con Row Level Security (RLS).
 
 **Tablas principales:**
-- `users` - Usuarios extendidos
+- `profiles` - Perfiles de usuarios
 - `companies` - Empresas (PyMEs)
 - `credit_applications` - Solicitudes de crédito
 - `documents` - Documentos de solicitudes
-
-## 🧪 Testing
-
-```bash
-# Ejecutar tests (cuando estén implementados)
-uv run pytest
-```
-
-## 🚧 Estado del Proyecto
-
-**Fase actual:** MVP Core - Autenticación básica implementada
-
-**Próximos pasos:**
-- [ ] CRUD de empresas
-- [ ] CRUD de solicitudes de crédito
-- [ ] Sistema de aprobación/rechazo
-- [ ] Upload de documentos
 
 ## 👥 Equipo
 
