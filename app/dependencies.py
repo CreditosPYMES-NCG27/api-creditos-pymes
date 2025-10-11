@@ -4,17 +4,14 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt import PyJWKClient
 from supabase import AsyncClient, acreate_client
 
-from app.config import (
-    SUPABASE_PUBLISHABLE_KEY,
-    SUPABASE_SECRET_KEY,
-    SUPABASE_URL,
-)
+from app.config import Settings
 
 bearer = HTTPBearer()
+settings = Settings()
 
 
 def get_jwks_client():
-    return PyJWKClient(f"{SUPABASE_URL}/auth/v1/.well-known/jwks.json")
+    return PyJWKClient(f"{settings.project_url}/auth/v1/.well-known/jwks.json")
 
 
 def verify_jwt_token(token: str) -> dict:
@@ -41,7 +38,7 @@ def verify_jwt_token(token: str) -> dict:
             key=signing_key,
             algorithms=["ES256"],
             audience="authenticated",
-            issuer=f"{SUPABASE_URL}/auth/v1",
+            issuer=f"{settings.project_url}/auth/v1",
             options={
                 "verify_aud": True,
                 "verify_exp": True,
@@ -112,7 +109,7 @@ async def supabase_for_user(
     """
     token = creds.credentials
 
-    client = await acreate_client(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY)
+    client = await acreate_client(settings.project_url, settings.publishable_key)
     client.postgrest.auth(token)
 
     return client
@@ -125,5 +122,5 @@ async def supabase_for_admin() -> AsyncClient:
     :return: Cliente de Supabase con privilegios de administrador
     :rtype: AsyncClient
     """
-    client = await acreate_client(SUPABASE_URL, SUPABASE_SECRET_KEY)
+    client = await acreate_client(settings.project_url, settings.secret_key)
     return client
