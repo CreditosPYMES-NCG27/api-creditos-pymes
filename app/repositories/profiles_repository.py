@@ -1,34 +1,25 @@
-from typing import Any
+from uuid import UUID
 
-from supabase import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import select
+
+from app.core.enums import UserRole
+from app.models.profile import Profile
 
 
 class ProfileRepository:
-    """Repository para operaciones de base de datos relacionadas con usuarios"""
+    def __init__(self, session: AsyncSession):
+        self.session = session
 
-    def __init__(self, supabase_client: AsyncClient):
-        self.supa = supabase_client
+    async def read(self, user_id: UUID) -> Profile | None:
+        result = await self.session.execute(
+            select(Profile).where(Profile.id == user_id)
+        )
+        return result.scalars().first()
 
-    async def get_user_by_id(self, user_id: str) -> Any:
-        """
-        Obtener un usuario específico por ID.
-
-        Levanta excepción si el usuario no existe.
-
-        :param user_id: ID del usuario
-        :raises Exception: Si el usuario no se encuentra
-        :return: Datos del usuario
-        """
-        try:
-            res = (
-                await self.supa.table("profiles")
-                .select("*")
-                .eq("id", user_id)
-                .single()
-                .execute()
-            )
-            if not res.data:
-                raise Exception("Usuario no encontrado")
-            return res.data
-        except Exception as e:
-            raise Exception(f"Error al obtener usuario: {str(e)}")
+    async def get_user_role(self, user_id: UUID) -> UserRole | None:
+        result = await self.session.execute(
+            select(Profile).where(Profile.id == user_id)
+        )
+        profile = result.scalars().first()
+        return profile.role if profile else None
