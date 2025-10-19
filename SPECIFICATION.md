@@ -1,4 +1,4 @@
-# API Créditos PyMEs — Especificación (alineada al código actual)
+# API Créditos PyMEs — Especificación
 
 Versión: 0.1.0
 
