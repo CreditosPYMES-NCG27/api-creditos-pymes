@@ -1,58 +1,45 @@
-from datetime import date, datetime
-from typing import Any, Dict
+from datetime import datetime
+from typing import Annotated
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, EmailStr, Field
 
 
-class CompanyBase(BaseModel):
-    """Modelo base para empresa con campos comunes"""
-
-    legal_name: str = Field(..., min_length=1, max_length=255)
-    tax_id: str = Field(..., min_length=1, max_length=50)
-    contact_name: str = Field(..., min_length=1, max_length=255)
-    contact_email: str = Field(..., min_length=1, max_length=255)
-    contact_phone: str = Field(..., min_length=1, max_length=20)
-    address: Dict[str, Any] = Field(
-        ...
-    )  # JSONB: {street, city, state, country, postal_code}
-    industry: str | None = Field(None, max_length=100)
-    foundation_date: date | None = None
-    status: str = Field(default="active", pattern="^(active|inactive|blacklisted)$")
+class CompanyAddress(BaseModel):
+    street: str = Field(..., description="Street address")
+    city: str = Field(..., description="City name")
+    state: str = Field(..., description="State or province")
+    zip_code: str = Field(..., description="ZIP or postal code")
+    country: str = Field(..., description="Country name")
 
 
-class CompanyCreate(CompanyBase):
-    """Modelo para crear una nueva empresa"""
+class CompanyResponse(BaseModel):
+    """Esquema de empresa"""
 
-    pass
+    id: Annotated[UUID, Field(description="ID único de la empresa")]
+    user_id: Annotated[
+        UUID, Field(description="ID del usuario propietario de la empresa")
+    ]
+    legal_name: Annotated[str, Field(description="Nombre legal de la empresa")]
+    tax_id: Annotated[
+        str, Field(description="Número de identificación fiscal de la empresa")
+    ]
+    contact_email: Annotated[
+        EmailStr, Field(description="Correo electrónico de contacto")
+    ]
+    contact_phone: Annotated[str, Field(description="Teléfono de contacto")]
+    address: Annotated[CompanyAddress, Field(description="Dirección de la empresa")]
+    created_at: Annotated[
+        datetime, Field(description="Fecha de creación de la empresa")
+    ]
+    updated_at: Annotated[
+        datetime, Field(description="Fecha de actualización de la empresa")
+    ]
 
 
 class CompanyUpdate(BaseModel):
     """Modelo para actualizar una empresa (campos opcionales)"""
 
-    legal_name: str | None = Field(None, min_length=1, max_length=255)
-    tax_id: str | None = Field(None, min_length=1, max_length=50)
-    contact_name: str | None = Field(None, min_length=1, max_length=255)
-    contact_email: str | None = Field(None, min_length=1, max_length=255)
-    contact_phone: str | None = Field(None, min_length=1, max_length=20)
-    address: Dict[str, Any] | None = None
-    industry: str | None = Field(None, max_length=100)
-    foundation_date: date | None = None
-    status: str | None = Field(None, pattern="^(active|inactive|blacklisted)$")
-
-
-class CompanyResponse(CompanyBase):
-    """Modelo de respuesta para empresa"""
-
-    id: UUID
-    user_id: UUID
-    created_at: datetime
-    updated_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class CompanyWithUser(CompanyResponse):
-    """Empresa con información de su usuario propietario"""
-
-    user: dict | None = None
+    contact_email: Annotated[str | None, Field(min_length=1, max_length=255)] = None
+    contact_phone: Annotated[str | None, Field(min_length=1, max_length=20)] = None
+    address: Annotated[CompanyAddress | None, Field()] = None

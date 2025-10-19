@@ -1,70 +1,83 @@
-from typing import List
 from uuid import UUID
 
-from supabase import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.enums import UserRole
+from app.core.errors import NotFoundError, ValidationDomainError
 from app.repositories.companies_repository import CompanyRepository
-from app.schemas.company import CompanyCreate, CompanyResponse, CompanyUpdate
+from app.repositories.protocols import (
+    CompanyRepositoryProtocol,
+    ProfileRepositoryProtocol,
+)
+from app.schemas.auth import Principal
+from app.schemas.company import CompanyResponse, CompanyUpdate
+from app.schemas.pagination import Paginated, PaginatedParams
+from app.services.base_service import BaseService
 
 
-class CompanyService:
+class CompanyService(BaseService):
     """Servicio para lógica de negocio de empresas"""
 
-    def __init__(self, supabase_client: AsyncClient):
-        self.repo = CompanyRepository(supabase_client)
-
-    async def list_companies(
+    def __init__(
         self,
-        page: int = 1,
-        limit: int = 20,
-        status: str | None = None,
-        search: str | None = None,
-    ) -> List[CompanyResponse]:
-        companies = await self.repo.list_companies(
-            page=page, limit=limit, status=status, search=search
-        )
-        return [CompanyResponse(**company) for company in companies]
+        session: AsyncSession,
+        company_repo: CompanyRepositoryProtocol | None = None,
+        profile_repo: ProfileRepositoryProtocol | None = None,
+    ):
+        super().__init__(session, profile_repo)
+        self.company_repo = company_repo or CompanyRepository(session)
 
-    async def create_company(
-        self, company: CompanyCreate, user_id: str
+    async def get_company_by_id(
+        self, user: Principal, company_id: UUID
     ) -> CompanyResponse:
-        if await self.repo.check_user_has_company(user_id):
-            raise ValueError("El usuario ya tiene una empresa registrada")
+        await self.assert_role(user.sub, UserRole.admin, UserRole.operator)
+        company = await self.company_repo.get_by_id(company_id)
+        if not company:
+            raise NotFoundError("Empresa no encontrada")
+        return CompanyResponse.model_validate(company.model_dump())
 
-        if await self.repo.check_company_exists_by_tax_id(company.tax_id):
-            raise ValueError("El tax_id ya está registrado")
+    async def get_company_by_user_id(self, user: Principal) -> CompanyResponse:
+        company = await self.company_repo.get_by_user_id(UUID(user.sub))
+        if not company:
+            raise NotFoundError("Empresa no encontrada para el usuario dado")
+        return CompanyResponse.model_validate(company.model_dump())
 
-        data = company.model_dump()
-        data["user_id"] = user_id
-
-        created_company = await self.repo.create_company(data)
-        # No actualizar company_id en profiles - la relación es unidireccional desde companies
-
-        return CompanyResponse(**created_company)
-
-    async def get_company_by_id(self, company_id: UUID) -> CompanyResponse:
-        company = await self.repo.get_company_by_id(company_id)
-        return CompanyResponse(**company)
-
-    async def update_company(
-        self, company_id: UUID, company: CompanyUpdate, user_id: str
+    async def update_user_company(
+        self,
+        user: Principal,
+        company: CompanyUpdate,
     ) -> CompanyResponse:
-        existing = await self.repo.get_company_by_id(company_id)
-        if existing["user_id"] != user_id:
-            raise ValueError("No tienes permisos para actualizar esta empresa")
+        existing = await self.company_repo.get_by_user_id(UUID(user.sub))
+        if not existing:
+            raise NotFoundError("Empresa no encontrada para el usuario dado")
 
         update_data = {k: v for k, v in company.model_dump().items() if v is not None}
         if not update_data:
-            raise ValueError("No se proporcionaron campos para actualizar")
+            raise ValidationDomainError("No hay datos para actualizar")
 
-        if "tax_id" in update_data and await self.repo.check_company_exists_by_tax_id(
-            update_data["tax_id"], company_id
-        ):
-            raise ValueError("El tax_id ya está registrado")
+        updated = await self.company_repo.update(existing.id, update_data)
+        if not updated:
+            raise ValidationDomainError("Error al actualizar datos de la empresa")
+        return CompanyResponse.model_validate(updated.model_dump())
 
-        updated = await self.repo.update_company(company_id, update_data)
-        return CompanyResponse(**updated)
-
-    async def get_company_by_user_id(self, user_id: str) -> CompanyResponse | None:
-        company = await self.repo.get_company_by_user_id(user_id)
-        return CompanyResponse(**company) if company else None
+    async def list_companies(
+        self,
+        user: Principal,
+        params: PaginatedParams,
+    ) -> Paginated[CompanyResponse]:
+        await self.assert_role(user.sub, UserRole.admin, UserRole.operator)
+        items, total = await self.company_repo.list(
+            page=params.page,
+            limit=params.limit,
+            sort=params.sort,
+            order=params.order,
+        )
+        meta = BaseService.create_pagination_meta(
+            total=total,
+            page=params.page,
+            per_page=params.limit,
+        )
+        return Paginated[CompanyResponse](
+            items=[CompanyResponse.model_validate(item.model_dump()) for item in items],
+            meta=meta,
+        )

@@ -1,16 +1,21 @@
 from datetime import datetime
+from typing import Annotated
+from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, EmailStr, Field
+
+from app.core.enums import UserRole
 
 
-class UserResponse(BaseModel):
-    """Modelo básico de respuesta para usuario"""
+class ProfileResponse(BaseModel):
+    """Modelo de perfil de usuario"""
 
-    id: str
-    email: str
-    full_name: str | None
-    phone: str | None
-    role: str
-    created_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
+    id: Annotated[UUID, Field(description="ID único del perfil")]
+    email: Annotated[EmailStr, Field(description="Correo electrónico del usuario")]
+    first_name: Annotated[str | None, Field(description="Nombre(s) del usuario")]
+    last_name: Annotated[str | None, Field(description="Apellido(s) del usuario")]
+    role: Annotated[UserRole, Field(description="Rol del usuario")]
+    created_at: Annotated[datetime, Field(description="Fecha de creación del perfil")]
+    updated_at: Annotated[
+        datetime, Field(description="Fecha de actualización del perfil")
+    ]

@@ -1,22 +1,19 @@
-from supabase import AsyncClient
+from uuid import UUID
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.errors import NotFoundError
 from app.repositories.profiles_repository import ProfileRepository
-from app.schemas.profile import UserResponse
+from app.schemas.auth import Principal
+from app.schemas.profile import ProfileResponse
 
 
 class ProfileService:
-    """Servicio para lógica de negocio relacionada con usuarios"""
+    def __init__(self, session: AsyncSession):
+        self.profile_repo = ProfileRepository(session)
 
-    def __init__(self, supabase_client: AsyncClient):
-        self.repository = ProfileRepository(supabase_client)
-
-    async def get_current_user_profile(self, user_id: str) -> UserResponse:
-        """
-        Obtener perfil del usuario actual.
-
-        :param user_id: ID del usuario autenticado
-        :return: Datos del perfil del usuario
-        :raises Exception: Si el usuario no existe
-        """
-        user_data = await self.repository.get_user_by_id(user_id)
-        return UserResponse(**user_data)
+    async def get_user_profile(self, user: Principal) -> ProfileResponse:
+        profile = await self.profile_repo.read(UUID(user.sub))
+        if not profile:
+            raise NotFoundError("Usuario no encontrado")
+        return ProfileResponse.model_validate(profile.model_dump())

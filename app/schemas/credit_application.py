@@ -1,69 +1,78 @@
 from datetime import datetime
-from enum import StrEnum
+from decimal import Decimal
+from typing import Annotated
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
+
+from app.core.enums import CreditApplicationPurpose, CreditApplicationStatus
 
 
-class CreditPurpose(StrEnum):
-    """Propósitos válidos para la solicitud de crédito (MVP)."""
-
-    working_capital = "working_capital"
-    equipment = "equipment"
-    expansion = "expansion"
-    inventory = "inventory"
-    refinancing = "refinancing"
-    other = "other"
-
-
-PURPOSE_LABELS: dict[CreditPurpose, str] = {
-    CreditPurpose.working_capital: "Capital de trabajo",
-    CreditPurpose.equipment: "Equipamiento",
-    CreditPurpose.expansion: "Expansión",
-    CreditPurpose.inventory: "Inventario",
-    CreditPurpose.refinancing: "Refinanciamiento",
-    CreditPurpose.other: "Otro",
-}
-
-
-class CreditApplicationBase(BaseModel):
-    """Modelo base para solicitud de crédito"""
-
-    requested_amount: float = Field(..., gt=0)
-    term_months: int = Field(..., ge=1, le=360)
-    purpose: CreditPurpose = Field(..., description="Propósito del crédito")
-    status: str = Field(
-        default="pending", pattern="^(pending|in_review|approved|rejected)$"
-    )
-
-
-class CreditApplicationCreate(CreditApplicationBase):
+class CreditApplicationCreate(BaseModel):
     """Modelo para crear una nueva solicitud de crédito"""
 
-    pass
+    requested_amount: Annotated[
+        Decimal, Field(..., gt=0, description="Monto solicitado")
+    ]
+    term_months: Annotated[int, Field(..., ge=1, le=360, description="Plazo en meses")]
+    purpose: Annotated[
+        CreditApplicationPurpose, Field(..., description="Propósito del crédito")
+    ]
+    purpose_other: Annotated[str | None, Field(None, description="Otro propósito")]
 
 
 class CreditApplicationUpdate(BaseModel):
     """Modelo para actualizar una solicitud (solo operadores)"""
 
-    status: str | None = Field(None, pattern="^(pending|in_review|approved|rejected)$")
-    risk_score: float | None = Field(None, ge=0, le=100)
-    operator_id: UUID | None = None
-    reviewed_at: datetime | None = None
+    status: Annotated[
+        CreditApplicationStatus | None, Field(None, description="Nuevo estado")
+    ]
+    risk_score: Annotated[
+        Decimal | None, Field(None, ge=0, le=100, description="Puntaje de riesgo")
+    ]
+    approved_amount: Annotated[
+        Decimal | None, Field(None, gt=0, description="Monto aprobado")
+    ]
+    interest_rate: Annotated[
+        Decimal | None, Field(None, ge=0, description="Tasa de interés")
+    ]
+    purpose: Annotated[
+        CreditApplicationPurpose | None,
+        Field(None, description="Propósito del crédito"),
+    ]
+    purpose_other: Annotated[str | None, Field(None, description="Otro propósito")]
 
 
-class CreditApplicationResponse(CreditApplicationBase):
+class CreditApplicationResponse(BaseModel):
     """Modelo de respuesta para solicitud de crédito"""
 
-    id: UUID
-    company_id: UUID
-    risk_score: float | None
-    operator_id: UUID | None
-    reviewed_at: datetime | None
-    review_notes: str | None
-    approved_amount: float | None
-    interest_rate: float | None
-    created_at: datetime
-    updated_at: datetime
+    id: Annotated[UUID, Field(description="ID único de la solicitud")]
+    company_id: Annotated[UUID, Field(description="ID de la empresa")]
+    requested_amount: Annotated[
+        Decimal, Field(..., gt=0, description="Monto solicitado")
+    ]
+    purpose: Annotated[
+        CreditApplicationPurpose, Field(..., description="Propósito del crédito")
+    ]
+    purpose_other: Annotated[str | None, Field(description="Otro propósito")]
+    term_months: Annotated[int, Field(..., ge=1, le=360, description="Plazo en meses")]
+    status: Annotated[
+        CreditApplicationStatus,
+        Field(
+            default=CreditApplicationStatus.pending,
+            description="Estado de la solicitud",
+        ),
+    ]
+    risk_score: Annotated[Decimal | None, Field(description="Puntaje de riesgo")]
+    approved_amount: Annotated[Decimal | None, Field(description="Monto aprobado")]
+    interest_rate: Annotated[Decimal | None, Field(description="Tasa de interés")]
+    created_at: Annotated[datetime, Field(description="Fecha de creación")]
+    updated_at: Annotated[datetime, Field(description="Fecha de actualización")]
 
-    model_config = ConfigDict(from_attributes=True)
+
+class CreditPurposeResponse(BaseModel):
+    """Modelo de respuesta para propósitos de crédito"""
+
+    value: Annotated[int, Field(description="Valor numérico para orden")]
+    slug: Annotated[str, Field(description="Slug interno")]
+    label: Annotated[str, Field(description="Texto para display")]
