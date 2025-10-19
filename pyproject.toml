@@ -3,11 +3,35 @@ name = "api-creditos-pymes"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.11"
 dependencies = [
+    "asyncpg>=0.30.0",
     "dotenv>=0.9.9",
     "fastapi[standard]>=0.118.0",
     "pydantic-settings>=2.11.0",
     "pyjwt[crypto]>=2.10.1",
-    "supabase>=2.21.1",
+    "sqlmodel>=0.0.27",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short --asyncio-mode=auto"
+markers = [
+    "unit: tests unitarios",
+    "integration: tests de integración",
+    "slow: tests lentos"
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.2",
+    "pytest-asyncio>=1.2.0",
+    "pytest-cov>=7.0.0",
+    "pytest-mock>=3.15.1",
+    "faker>=37.11.0",
+    "httpx>=0.28.1",
+    "aiosqlite>=0.21.0",
 ]

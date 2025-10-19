@@ -6,7 +6,7 @@ API REST para gestión de solicitudes de crédito a PyMEs, desarrollada con Fast
 
 - Python 3.13+
 - UV (gestor de paquetes)
-- Cuenta de Supabase (base de datos y autenticación)
+- Base de datos PostgreSQL accesible (puede ser Supabase)
 
 ## 🚀 Instalación
 
@@ -29,12 +29,15 @@ uv sync
 cp .env.example .env
 ```
 
-Editar `.env` con tus credenciales de Supabase:
+Editar `.env` con tus credenciales (ver variables usadas en `app/config.py`):
 
 ```env
 SUPABASE_URL=https://my-project-id.supabase.co
-SUPABASE_PUBLISHABLE_KEY=my-publishable-key
-SUPABASE_SECRET_KEY=my-secret-key
+DB_USER=postgres
+DB_PASS=postgres
+DB_NAME=postgres
+DB_HOST=localhost
+DB_PORT=5432
 ```
 
 ## 🏃 Ejecución
@@ -54,20 +57,23 @@ Una vez iniciado el servidor, accede a:
 - **Swagger UI (interactiva)**: http://localhost:8000/docs
 - **ReDoc (documentación)**: http://localhost:8000/redoc
 
-## 🛠️ Estructura del Proyecto
+## 🛠️ Estructura del Proyecto (resumen)
 
 ```
 api-creditos-pymes/
 ├── app/
 │   ├── main.py              # Punto de entrada de la aplicación
 │   ├── config.py            # Configuración y variables de entorno
-│   ├── dependencies.py      # Dependencias compartidas (auth, Supabase)
+│   ├── bootstrap.py         # Lifespan (DB y JWKS)
+│   ├── exception_handlers.py# Mapeo de errores de dominio a HTTP
+│   ├── core/                # Enums y errores
+│   ├── dependencies/        # Dependencias (auth, db, services)
 │   ├── schemas/             # Modelos Pydantic (esquemas de datos)
 │   │   ├── company.py
 │   │   ├── credit_application.py
 │   │   ├── profile.py
 │   │   └── __init__.py
-│   ├── repositories/        # Acceso a datos (Supabase)
+│   ├── repositories/        # Acceso a datos (SQLModel/SQLAlchemy)
 │   │   ├── companies_repository.py
 │   │   ├── credit_applications_repository.py
 │   │   ├── profiles_repository.py
@@ -89,7 +95,9 @@ api-creditos-pymes/
 └── README.md
 ```
 
-## 📝 Endpoints Disponibles
+Para detalles completos, consulta `SPECIFICATION.md`.
+
+## 📝 Endpoints Disponibles (implementados)
 
 ### Raíz y Health Check
 
@@ -104,24 +112,23 @@ api-creditos-pymes/
 | ------ | --------------------- | ---------------------------------------- |
 | GET    | `/api/v1/profiles/me` | Obtener perfil del usuario autenticado   |
 
-### Compañías
+### Empresas
 
 | Método | Endpoint                    | Descripción                              |
 | ------ | --------------------------- | ---------------------------------------- |
-| GET    | `/api/v1/companies/`        | Listar compañías (con filtros y paginación) |
-| POST   | `/api/v1/companies/`        | Crear nueva compañía                    |
-| GET    | `/api/v1/companies/{id}`    | Obtener compañía por ID                 |
-| PUT    | `/api/v1/companies/{id}`    | Actualizar compañía                     |
-| GET    | `/api/v1/companies/me`      | Obtener compañía del usuario autenticado |
+| GET    | `/api/v1/companies/`        | Listar empresas (paginado)              |
+| GET    | `/api/v1/companies/{id}`    | Obtener empresa por ID                  |
+| GET    | `/api/v1/companies/me`      | Obtener empresa del usuario autenticado |
+| PATCH  | `/api/v1/companies/me`      | Actualizar parcialmente tu empresa      |
 
-### Aplicaciones de Crédito
+### Solicitudes de Crédito
 
 | Método | Endpoint                              | Descripción                              |
 | ------ | ------------------------------------- | ---------------------------------------- |
-| GET    | `/api/v1/credit-applications/`        | Listar aplicaciones de crédito (con filtros y paginación) |
-| POST   | `/api/v1/credit-applications/`        | Crear nueva aplicación de crédito       |
-| GET    | `/api/v1/credit-applications/{id}`    | Obtener aplicación por ID               |
-| PUT    | `/api/v1/credit-applications/{id}`    | Actualizar aplicación                   |
+| GET    | `/api/v1/credit-applications/`        | Listar solicitudes (filtros y paginación) |
+| POST   | `/api/v1/credit-applications/`        | Crear nueva solicitud                    |
+| GET    | `/api/v1/credit-applications/{id}`    | Obtener solicitud por ID                 |
+| PATCH  | `/api/v1/credit-applications/{id}`    | Actualizar solicitud (operadores/admin)  |
 
 ### Metadatos
 
@@ -131,11 +138,10 @@ api-creditos-pymes/
 
 ## 🔐 Autenticación
 
-Esta API utiliza **Supabase Auth** para autenticación:
+Esta API valida tokens JWT emitidos por Supabase Auth (u otro emisor compatible) usando JWKS:
 
-- Los usuarios se registran y autentican directamente con Supabase Auth
-- La API valida tokens JWT en cada request
-- Todos los endpoints protegidos requieren header `Authorization: Bearer {JWT_TOKEN}`
+- El servidor valida `issuer` `${SUPABASE_URL}/auth/v1`, `audience` `authenticated` y algoritmo ES256.
+- Todos los endpoints protegidos requieren header `Authorization: Bearer {JWT_TOKEN}`.
 
 **Ejemplo de llamada autenticada:**
 
@@ -146,13 +152,12 @@ curl -H "Authorization: Bearer eyJ0eXAiOiJKV1..." \
 
 ## 🗄️ Base de Datos
 
-La API utiliza **Supabase (PostgreSQL)** con Row Level Security (RLS).
+La API utiliza PostgreSQL mediante SQLModel/SQLAlchemy. En `db/` hay scripts SQL (tipos/tablas/políticas) que puedes usar como referencia o punto de partida.
 
-**Tablas principales:**
+Tablas principales del modelo actual (ver `app/models/*`):
 - `profiles` - Perfiles de usuarios
 - `companies` - Empresas (PyMEs)
 - `credit_applications` - Solicitudes de crédito
-- `documents` - Documentos de solicitudes
 
 ## 👥 Equipo
 
@@ -161,3 +166,7 @@ CreditosPYMES-NCG27
 ## 📄 Licencia
 
 Este proyecto está bajo la Licencia MIT. Ver [LICENSE](LICENSE) para más detalles.
+
+---
+
+Para especificación técnica detallada de endpoints, esquemas y reglas de negocio, ver: [SPECIFICATION.md](./SPECIFICATION.md)

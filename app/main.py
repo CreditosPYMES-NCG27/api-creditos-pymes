@@ -1,12 +1,17 @@
 from fastapi import APIRouter, FastAPI
 
+from app.bootstrap import app_lifespan
+from app.exception_handlers import register_exception_handlers
 from app.routers import companies, credit_applications, metadata, profiles
 
 app = FastAPI(
     title="API Créditos PyMEs",
     description="API para gestión de créditos a pequeñas y medianas empresas",
     version="0.1.0",
+    lifespan=app_lifespan,
 )
+
+register_exception_handlers(app)
 
 
 @app.get("/", tags=["root"])
