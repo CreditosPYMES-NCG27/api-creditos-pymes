@@ -1,4 +1,5 @@
 from fastapi import APIRouter, FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.bootstrap import app_lifespan
 from app.exception_handlers import register_exception_handlers
@@ -9,6 +10,16 @@ app = FastAPI(
     description="API para gestión de créditos a pequeñas y medianas empresas",
     version="0.1.0",
     lifespan=app_lifespan,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://automatic-adventure-4xvwg6r644xcj96w-5173.app.github.dev"
+    ],  # your frontend Codespace URL
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 register_exception_handlers(app)
