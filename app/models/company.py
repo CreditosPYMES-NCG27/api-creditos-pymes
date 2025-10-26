@@ -2,7 +2,8 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlmodel import JSON, Field, ForeignKeyConstraint, SQLModel, func
+from sqlalchemy import TIMESTAMP
+from sqlmodel import JSON, Column, Field, ForeignKeyConstraint, SQLModel, func
 
 
 class Company(SQLModel, table=True):
@@ -20,13 +21,18 @@ class Company(SQLModel, table=True):
     address: dict[str, Any] = Field(nullable=False, sa_type=JSON)
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),
-        nullable=False,
-        sa_column_kwargs={"server_default": func.now()},
+        sa_column=Column(
+            TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+        ),
     )
     updated_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),
-        nullable=False,
-        sa_column_kwargs={"server_default": func.now(), "onupdate": func.now()},
+        sa_column=Column(
+            TIMESTAMP(timezone=True),
+            nullable=False,
+            server_default=func.now(),
+            onupdate=func.now(),
+        ),
     )
 
     __tablename__ = "companies"  # type: ignore[assignment]
