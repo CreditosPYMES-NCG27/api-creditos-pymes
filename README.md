@@ -32,13 +32,26 @@ cp .env.example .env
 Editar `.env` con tus credenciales (ver variables usadas en `app/config.py`):
 
 ```env
+# Supabase
 SUPABASE_URL=https://my-project-id.supabase.co
+SUPABASE_SECRET_KEY=your_service_role_key_here
+
+# Database
 DB_USER=postgres
 DB_PASS=postgres
 DB_NAME=postgres
 DB_HOST=localhost
 DB_PORT=5432
+
+# HelloSign (Dropbox Sign) - Para firma electrónica de documentos
+HELLOSIGN_API_KEY=your_hellosign_api_key
+HELLOSIGN_CLIENT_ID=your_hellosign_client_id
 ```
+
+**Notas importantes:**
+- `SUPABASE_SECRET_KEY`: La **service_role key** de tu proyecto Supabase (Settings → API)
+- `HELLOSIGN_API_KEY` y `HELLOSIGN_CLIENT_ID`: Obtenerlos en [HelloSign API Settings](https://app.hellosign.com/home/myAccount#api)
+- Para configurar webhooks de HelloSign, consulta [`docs/HELLOSIGN_WEBHOOK.md`](docs/HELLOSIGN_WEBHOOK.md)
 
 ## 🏃 Ejecución
 

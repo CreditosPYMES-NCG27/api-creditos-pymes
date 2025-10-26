@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import UUID, uuid4
 
+from sqlalchemy import TIMESTAMP
 from sqlmodel import (
     CheckConstraint,
     Column,
@@ -68,13 +69,18 @@ class CreditApplication(SQLModel, table=True):
     )
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),
-        nullable=False,
-        sa_column_kwargs={"server_default": func.now()},
+        sa_column=Column(
+            TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+        ),
     )
     updated_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),
-        nullable=False,
-        sa_column_kwargs={"server_default": func.now(), "onupdate": func.now()},
+        sa_column=Column(
+            TIMESTAMP(timezone=True),
+            nullable=False,
+            server_default=func.now(),
+            onupdate=func.now(),
+        ),
     )
 
     __tablename__ = "credit_applications"  # type: ignore[assignment]

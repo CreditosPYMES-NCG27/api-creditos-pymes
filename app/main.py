@@ -2,7 +2,7 @@ from fastapi import APIRouter, FastAPI
 
 from app.bootstrap import app_lifespan
 from app.exception_handlers import register_exception_handlers
-from app.routers import companies, credit_applications, metadata, profiles
+from app.routers import companies, credit_applications, documents, metadata, profiles
 
 app = FastAPI(
     title="API Créditos PyMEs",
@@ -35,5 +35,9 @@ api_v1_router = APIRouter(prefix="/api/v1")
 api_v1_router.include_router(profiles.router)
 api_v1_router.include_router(companies.router)
 api_v1_router.include_router(credit_applications.router)
+api_v1_router.include_router(documents.router)
 api_v1_router.include_router(metadata.router)
 app.include_router(api_v1_router)
+
+# Webhooks (public, no /api/v1 prefix)
+app.include_router(documents.webhook_router)

@@ -27,3 +27,23 @@ class CreditApplicationPurpose(StrEnum):
     inventory = "inventory"
     refinancing = "refinancing"
     other = "other"
+
+
+class DocumentType(StrEnum):
+    """Tipos de documento válidos."""
+
+    tax_return = "tax_return"
+    financial_statement = "financial_statement"
+    id_document = "id_document"
+    business_license = "business_license"
+    bank_statement = "bank_statement"
+    other = "other"
+
+
+class SignatureStatus(StrEnum):
+    """Estados de firma de documento."""
+
+    unsigned = "unsigned"
+    pending = "pending"
+    signed = "signed"
+    declined = "declined"

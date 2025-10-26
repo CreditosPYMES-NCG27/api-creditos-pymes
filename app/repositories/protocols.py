@@ -1,11 +1,13 @@
 """Protocols for repository interfaces following DIP (Dependency Inversion Principle)"""
 
+from datetime import datetime
 from typing import Any, Protocol, Sequence
 from uuid import UUID
 
-from app.core.enums import UserRole
+from app.core.enums import SignatureStatus, UserRole
 from app.models.company import Company
 from app.models.credit_application import CreditApplication
+from app.models.document import Document
 
 
 class ProfileRepositoryProtocol(Protocol):
@@ -77,4 +79,45 @@ class CreditApplicationRepositoryProtocol(Protocol):
         self, application_id: UUID, data: dict[str, Any]
     ) -> CreditApplication | None:
         """Update credit application data"""
+        ...
+
+
+class DocumentRepositoryProtocol(Protocol):
+    """Protocol for document repository operations"""
+
+    async def get_by_id(self, document_id: UUID) -> Document | None:
+        """Get document by ID"""
+        ...
+
+    async def get_by_storage_path(self, storage_path: str) -> Document | None:
+        """Get document by storage path"""
+        ...
+
+    async def get_by_signature_request_id(
+        self, signature_request_id: str
+    ) -> Document | None:
+        """Get document by DocuSign signature request ID (envelope ID)"""
+        ...
+
+    async def list_by_user(
+        self, user_id: UUID, page: int = 1, limit: int = 20
+    ) -> tuple[Sequence[Document], int]:
+        """List documents by user ID with pagination"""
+        ...
+
+    async def list_by_application(
+        self, application_id: UUID, page: int = 1, limit: int = 20
+    ) -> tuple[Sequence[Document], int]:
+        """List documents by credit application ID with pagination"""
+        ...
+
+    async def update_signature_status(
+        self,
+        document_id: UUID,
+        signature_status: SignatureStatus,
+        signature_request_id: str | None = None,
+        signed_at: datetime | None = None,
+        signed_file_path: str | None = None,
+    ) -> Document | None:
+        """Update document signature status and related fields"""
         ...

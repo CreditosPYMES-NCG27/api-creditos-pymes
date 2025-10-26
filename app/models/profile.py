@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from pydantic import EmailStr
+from sqlalchemy import TIMESTAMP
 from sqlmodel import Column, Enum, Field, SQLModel, func
 
 from app.core.enums import UserRole
@@ -20,13 +21,18 @@ class Profile(SQLModel, table=True):
     )
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),
-        nullable=False,
-        sa_column_kwargs={"server_default": func.now()},
+        sa_column=Column(
+            TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+        ),
     )
     updated_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),
-        nullable=False,
-        sa_column_kwargs={"server_default": func.now(), "onupdate": func.now()},
+        sa_column=Column(
+            TIMESTAMP(timezone=True),
+            nullable=False,
+            server_default=func.now(),
+            onupdate=func.now(),
+        ),
     )
 
     __tablename__ = "profiles"  # type: ignore[assignment]
