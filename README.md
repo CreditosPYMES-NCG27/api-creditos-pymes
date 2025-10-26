@@ -14,7 +14,7 @@ API REST para gestión de solicitudes de crédito a PyMEs, desarrollada con Fast
 
 ```bash
 git clone https://github.com/CreditosPYMES-NCG27/api-creditos-pymes.git
-cd api-creditos-pymes
+
 ```
 
 2. Instalar dependencias con UV:
