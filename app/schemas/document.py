@@ -4,7 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from app.core.enums import DocumentType, SignatureStatus
+from app.core.enums import DocumentStatus, DocumentType, SignatureStatus
 
 
 class DocumentResponse(BaseModel):
@@ -22,6 +22,10 @@ class DocumentResponse(BaseModel):
     mime_type: Annotated[str | None, Field(description="Tipo MIME")]
     document_type: Annotated[
         DocumentType | None, Field(description="Tipo de documento")
+    ]
+    status: Annotated[
+        DocumentStatus,
+        Field(description="Estado de revisión: pending, approved, rejected, expired"),
     ]
     signature_status: Annotated[SignatureStatus, Field(description="Estado de firma")]
     signature_request_id: Annotated[
@@ -59,4 +63,13 @@ class SignatureStatusResponse(BaseModel):
     signature_request_id: Annotated[str, Field(description="ID de la solicitud")]
     status_code: Annotated[
         str, Field(description="Estado: pending, complete, declined, canceled, etc.")
+    ]
+
+
+class DocumentUpdate(BaseModel):
+    """Schema para actualizar status de documento (solo admin/operator)"""
+
+    status: Annotated[
+        DocumentStatus,
+        Field(description="Nuevo estado: pending, approved, rejected, expired"),
     ]

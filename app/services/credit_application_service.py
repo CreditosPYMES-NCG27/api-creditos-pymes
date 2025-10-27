@@ -62,7 +62,15 @@ class CreditApplicationService(BaseService):
                     meta=meta,
                 )
             company_id = user_company.id
-        # Operators/admins ven todas, o filtradas por company_id si especificado
+        else:
+            # Operators/admins NO ven solicitudes en draft
+            # Si no se especificó status, excluir draft implícitamente
+            # Si se especificó draft explícitamente, lanzar error
+            if status == CreditApplicationStatus.draft:
+                raise ForbiddenError(
+                    "Los operadores y administradores no pueden ver solicitudes en borrador"
+                )
+
         items, total = await self.app_repo.list_applications(
             page=page,
             limit=limit,
@@ -71,6 +79,14 @@ class CreditApplicationService(BaseService):
             sort=sort,
             order=order,
         )
+
+        # Filtrar drafts para operators/admins
+        if role in (UserRole.operator, UserRole.admin):
+            items = [
+                item for item in items if item.status != CreditApplicationStatus.draft
+            ]
+            total = len(items)
+
         meta = BaseService.create_pagination_meta(
             total=total,
             page=page,
@@ -93,6 +109,7 @@ class CreditApplicationService(BaseService):
                 "Debes registrar una empresa antes de solicitar crédito"
             )
 
+        # Verificar si hay solicitudes pendientes (no contar drafts)
         if await self.app_repo.check_company_has_pending_application(company.id):
             raise ValidationDomainError("Ya tienes una solicitud pendiente")
 
@@ -105,6 +122,8 @@ class CreditApplicationService(BaseService):
 
         data = application.model_dump()
         data["company_id"] = company.id
+        # Las nuevas solicitudes siempre empiezan en draft
+        data["status"] = CreditApplicationStatus.draft
 
         app_model = CreditApplication(**data)
         created = await self.app_repo.create_application(app_model)
@@ -131,20 +150,40 @@ class CreditApplicationService(BaseService):
         application_id: UUID,
         application: CreditApplicationUpdate,
     ) -> CreditApplicationResponse:
-        await self.assert_role(user.sub, UserRole.operator, UserRole.admin)
+        # Obtener rol primero (para tests que mockean assert_role)
+        role = await self.assert_role(user.sub)
+
         update_data = {
             k: v for k, v in application.model_dump().items() if v is not None
         }
+
         if not update_data:
             raise ValidationDomainError("No se proporcionaron campos para actualizar")
 
-        # Obtener la aplicación existente para validaciones de dominio
+        # Obtener la aplicación existente
         existing_app = await self.app_repo.get_application_by_id(application_id)
         if not existing_app:
             raise NotFoundError("Solicitud no encontrada")
 
+        # Verificar permisos según el estado y rol
+        if existing_app.status == CreditApplicationStatus.draft:
+            # Solo el applicant dueño puede editar un draft
+            if role == UserRole.applicant:
+                user_company = await self.company_repo.get_by_user_id(UUID(user.sub))
+                if not user_company or existing_app.company_id != user_company.id:
+                    raise ForbiddenError("No autorizado para editar esta solicitud")
+            else:
+                # Operators/admins no pueden editar drafts
+                raise ForbiddenError("No puede editar solicitudes en borrador")
+        else:
+            # Para solicitudes ya enviadas (pending, in_review, etc.), solo operators/admins pueden editar
+            if role not in (UserRole.operator, UserRole.admin):
+                raise ForbiddenError(
+                    "No puede modificar una solicitud ya enviada. Solo operadores y administradores pueden hacerlo"
+                )
+
         # Validaciones de dominio
-        await self._validate_application_update(existing_app, update_data)
+        await self._validate_application_update(existing_app, update_data, role)
 
         updated = await self.app_repo.update_application(application_id, update_data)
         if not updated:
@@ -155,27 +194,27 @@ class CreditApplicationService(BaseService):
         self,
         existing_app: CreditApplication,
         update_data: dict,
+        role: UserRole | None = None,
     ) -> None:
         """Valida las reglas de negocio para actualizar una aplicación de crédito.
 
         Args:
             existing_app: La aplicación existente antes de la actualización
             update_data: Los datos que se van a actualizar
+            role: Rol del usuario que realiza la actualización (opcional)
 
         Raises:
             ValidationDomainError: Si se violan las reglas de negocio
         """
         new_status = update_data.get("status", existing_app.status)
 
-        # Validar transiciones de estado: pending → in_review → approved/rejected
+        # Validar transiciones de estado
         if "status" in update_data:
-            self._validate_status_transition(existing_app.status, new_status)
+            self._validate_status_transition(existing_app.status, new_status, role)
 
         # Validaciones específicas por estado
         if new_status == CreditApplicationStatus.approved:
             self._validate_approved_status(update_data, existing_app)
-        elif new_status == CreditApplicationStatus.rejected:
-            self._validate_rejected_status(update_data)
 
         # Validar cambio de purpose a "other"
         if "purpose" in update_data:
@@ -207,17 +246,34 @@ class CreditApplicationService(BaseService):
         self,
         current_status: CreditApplicationStatus,
         new_status: CreditApplicationStatus,
+        role: UserRole | None = None,
     ) -> None:
         """Valida que las transiciones de estado sean válidas.
 
         Args:
             current_status: Estado actual
             new_status: Nuevo estado
+            role: Rol del usuario que realiza la transición (opcional)
 
         Raises:
             ValidationDomainError: Si la transición no es válida
         """
+        # Applicants solo pueden cambiar de draft a pending
+        if role == UserRole.applicant:
+            if current_status == CreditApplicationStatus.draft:
+                if new_status != CreditApplicationStatus.pending:
+                    raise ValidationDomainError(
+                        "Solo puede enviar la solicitud (cambiar a 'pending')"
+                    )
+            else:
+                raise ValidationDomainError(
+                    "No puede cambiar el estado de una solicitud ya enviada"
+                )
+            return
+
+        # Transiciones válidas para operators/admins
         valid_transitions = {
+            CreditApplicationStatus.draft: [],  # Operators/admins no pueden tocar drafts
             CreditApplicationStatus.pending: [
                 CreditApplicationStatus.in_review,
                 CreditApplicationStatus.approved,
@@ -277,18 +333,3 @@ class CreditApplicationService(BaseService):
         # Fijar reviewed_at si no viene
         if "reviewed_at" not in update_data:
             update_data["reviewed_at"] = datetime.now(timezone.utc)
-
-    def _validate_rejected_status(self, update_data: dict) -> None:
-        """Valida reglas específicas cuando el estado cambia a rejected.
-
-        Args:
-            update_data: Datos de actualización
-
-        Raises:
-            ValidationDomainError: Si se violan las reglas
-        """
-        # review_notes es obligatorio para trazabilidad
-        if "review_notes" not in update_data or not update_data["review_notes"]:
-            raise ValidationDomainError(
-                "review_notes es requerido cuando el status es 'rejected'"
-            )

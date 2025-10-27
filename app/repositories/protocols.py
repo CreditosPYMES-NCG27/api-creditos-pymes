@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any, Protocol, Sequence
 from uuid import UUID
 
-from app.core.enums import SignatureStatus, UserRole
+from app.core.enums import DocumentStatus, SignatureStatus, UserRole
 from app.models.company import Company
 from app.models.credit_application import CreditApplication
 from app.models.document import Document
@@ -120,4 +120,12 @@ class DocumentRepositoryProtocol(Protocol):
         signed_file_path: str | None = None,
     ) -> Document | None:
         """Update document signature status and related fields"""
+        ...
+
+    async def update_status(
+        self,
+        document_id: UUID,
+        status: DocumentStatus,
+    ) -> Document | None:
+        """Update document review status (pending, approved, rejected, expired)"""
         ...

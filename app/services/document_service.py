@@ -1,7 +1,6 @@
 """Servicio de documentos con workflow de firma digital (HelloSign)"""
 
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from uuid import UUID
 
 import httpx
@@ -18,7 +17,7 @@ from dropbox_sign.models.sub_signature_request_signer import (
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings
-from app.core.enums import SignatureStatus, UserRole
+from app.core.enums import DocumentStatus, SignatureStatus, UserRole
 from app.core.errors import ForbiddenError, NotFoundError, ValidationDomainError
 from app.repositories.documents_repository import DocumentRepository
 from app.repositories.protocols import DocumentRepositoryProtocol
@@ -26,7 +25,6 @@ from app.schemas.document import (
     DocumentResponse,
     SignatureRequest,
     SignatureResponse,
-    SignatureStatusResponse,
 )
 from app.schemas.pagination import Paginated
 from app.services.base_service import BaseService
@@ -238,168 +236,6 @@ class DocumentService(BaseService):
             expires_at=expires_at,
         )
 
-    async def get_signature_status(
-        self, signature_request_id: str, user_sub: str
-    ) -> SignatureStatusResponse:
-        """Consulta el estado de una signature request en HelloSign y descarga el PDF si está completo."""
-        # Permisos: admin/operator pueden consultar cualquier, applicant solo los suyos
-        document = await self.document_repo.get_by_signature_request_id(
-            signature_request_id
-        )
-        if not document:
-            raise NotFoundError("Documento no encontrado para esa signature request")
-
-        user_role = await self.assert_role(user_sub)
-        if user_role == UserRole.applicant and document.user_id != UUID(user_sub):
-            raise ForbiddenError("No tiene acceso a esta signature request")
-
-        try:
-            configuration = Configuration(username=self.settings.hellosign_api_key)
-            with ApiClient(configuration) as api_client:
-                sig_api = SignatureRequestApi(api_client)
-                res = sig_api.signature_request_get(signature_request_id)
-                sr = res.signature_request
-                # Derivar status desde flags/signatures
-                status_code: str
-                if getattr(sr, "is_complete", False):
-                    status_code = "complete"
-                elif any(
-                    getattr(s, "status_code", "") == "declined"
-                    for s in (sr.signatures or [])
-                ):
-                    status_code = "declined"
-                else:
-                    status_code = "pending"
-
-                # Si está completa, descargar y guardar PDF firmado
-                if (
-                    status_code == "complete"
-                    and document.signature_status != SignatureStatus.signed
-                ):
-                    file_obj = sig_api.signature_request_files(
-                        signature_request_id, file_type="pdf"
-                    )
-                    if hasattr(file_obj, "read"):
-                        file_bytes = file_obj.read()
-                    elif isinstance(file_obj, (bytes, bytearray)):
-                        file_bytes = bytes(file_obj)
-                    else:
-                        raise ValidationDomainError(
-                            "Respuesta de archivo de HelloSign no reconocida"
-                        )
-                    # Generar ruta para documento firmado
-                    original_path = Path(document.storage_path)
-                    signed_path_obj = (
-                        original_path.parent
-                        / f"{original_path.stem}_signed{original_path.suffix}"
-                    )
-                    # Convertir a formato POSIX (/) para Supabase Storage
-                    signed_path = signed_path_obj.as_posix()
-
-                    await self._upload_to_storage(
-                        bucket_name=document.bucket_name,
-                        file_path=signed_path,
-                        file_content=file_bytes,
-                        content_type=document.mime_type or "application/pdf",
-                    )
-
-                    await self.document_repo.update_signature_status(
-                        document_id=document.id,
-                        signature_status=SignatureStatus.signed,
-                        signed_at=datetime.now(timezone.utc),
-                        signed_file_path=signed_path,
-                    )
-
-                return SignatureStatusResponse(
-                    signature_request_id=signature_request_id, status_code=status_code
-                )
-        except Exception as e:
-            raise ValidationDomainError(f"Error consultando estado en HelloSign: {e}")
-
-    async def handle_signature_completed(self, signature_request_id: str) -> None:
-        """Procesa el evento de firma completada desde webhook de HelloSign.
-
-        Args:
-            signature_request_id: ID de la solicitud de firma
-        """
-        document = await self.document_repo.get_by_signature_request_id(
-            signature_request_id
-        )
-        if not document:
-            # Puede ser un evento de un documento que no está en nuestra DB
-            return
-
-        # Si ya está marcado como firmado, no hacer nada
-        if document.signature_status == SignatureStatus.signed:
-            return
-
-        try:
-            # Descargar PDF firmado
-            configuration = Configuration(username=self.settings.hellosign_api_key)
-            with ApiClient(configuration) as api_client:
-                sig_api = SignatureRequestApi(api_client)
-                file_obj = sig_api.signature_request_files(
-                    signature_request_id, file_type="pdf"
-                )
-
-                if hasattr(file_obj, "read"):
-                    file_bytes = file_obj.read()
-                elif isinstance(file_obj, (bytes, bytearray)):
-                    file_bytes = bytes(file_obj)
-                else:
-                    raise ValidationDomainError(
-                        "Respuesta de archivo de HelloSign no reconocida"
-                    )
-
-            # Generar ruta para documento firmado
-            original_path = Path(document.storage_path)
-            signed_path_obj = (
-                original_path.parent
-                / f"{original_path.stem}_signed{original_path.suffix}"
-            )
-            # Convertir a formato POSIX (/) para Supabase Storage
-            signed_path = signed_path_obj.as_posix()
-
-            # Subir a storage
-            await self._upload_to_storage(
-                bucket_name=document.bucket_name,
-                file_path=signed_path,
-                file_content=file_bytes,
-                content_type=document.mime_type or "application/pdf",
-            )
-
-            # Actualizar estado en DB
-            await self.document_repo.update_signature_status(
-                document_id=document.id,
-                signature_status=SignatureStatus.signed,
-                signed_at=datetime.now(timezone.utc),
-                signed_file_path=signed_path,
-            )
-
-        except Exception as e:
-            # Log error pero no fallar el webhook
-            print(f"Error procesando firma completada: {e}")
-
-    async def handle_signature_declined(self, signature_request_id: str) -> None:
-        """Procesa el evento de firma rechazada desde webhook de HelloSign.
-
-        Args:
-            signature_request_id: ID de la solicitud de firma
-        """
-        document = await self.document_repo.get_by_signature_request_id(
-            signature_request_id
-        )
-        if not document:
-            return
-
-        # Marcar como declined
-        await self.document_repo.update_signature_status(
-            document_id=document.id,
-            signature_status=SignatureStatus.declined,
-        )
-
-    # DocuSign-specific helpers eliminados en migración a HelloSign
-
     def _get_storage_signed_url(self, storage_path: str, bucket_name: str) -> str:
         """Genera URL firmada temporal para acceder al documento en Supabase Storage.
 
@@ -431,43 +267,39 @@ class DocumentService(BaseService):
         except httpx.HTTPError as e:
             raise ValidationDomainError(f"Error generando URL firmada: {e}")
 
-    # DocuSign envelope creation eliminado
-
-    # Descarga de documento firmado manejada en get_signature_status para HelloSign
-
-    async def _upload_to_storage(
+    async def update_document_status(
         self,
-        bucket_name: str,
-        file_path: str,
-        file_content: bytes,
-        content_type: str,
-    ) -> None:
-        """Sube un archivo a Supabase Storage.
+        document_id: UUID,
+        status: DocumentStatus,
+        user_sub: str,
+    ) -> DocumentResponse:
+        """Actualiza el status de un documento (solo admin/operator).
 
         Args:
-            bucket_name: Nombre del bucket
-            file_path: Ruta del archivo en storage
-            file_content: Contenido del archivo
-            content_type: MIME type del archivo
+            document_id: ID del documento
+            status: Nuevo estado (pending, approved, rejected)
+            user_sub: ID del usuario autenticado
+
+        Returns:
+            DocumentResponse: Documento actualizado
 
         Raises:
-            ValidationError: Si hay errores subiendo el archivo
+            NotFoundError: Si el documento no existe
+            ForbiddenError: Si el usuario no tiene permisos (debe ser admin/operator)
         """
-        # Usar endpoint con upsert=true para permitir sobrescribir
-        url = f"{self.settings.project_url}/storage/v1/object/{bucket_name}/{file_path}"
+        # Verificar permisos: solo admin/operator pueden cambiar status
+        user_role = await self.assert_role(user_sub)
+        if user_role not in (UserRole.admin, UserRole.operator):
+            raise ForbiddenError(
+                "Solo administradores y operadores pueden actualizar el estado del documento"
+            )
 
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    url,
-                    content=file_content,
-                    headers={
-                        "Authorization": f"Bearer {self.settings.supabase_service_key}",
-                        "apikey": self.settings.supabase_service_key,
-                        "Content-Type": content_type,
-                        "x-upsert": "true",  # Permitir sobrescribir si existe
-                    },
-                )
-                response.raise_for_status()
-        except httpx.HTTPError as e:
-            raise ValidationDomainError(f"Error subiendo archivo a storage: {e}")
+        # Actualizar status
+        document = await self.document_repo.update_status(
+            document_id=document_id,
+            status=status,
+        )
+        if not document:
+            raise NotFoundError("Documento no encontrado")
+
+        return DocumentResponse.model_validate(document, from_attributes=True)

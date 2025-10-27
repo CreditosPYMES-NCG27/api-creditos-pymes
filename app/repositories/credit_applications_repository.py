@@ -92,10 +92,16 @@ class CreditApplicationRepository:
         return application
 
     async def check_company_has_pending_application(self, company_id: UUID) -> bool:
+        """Verifica si una empresa tiene solicitudes pendientes (no cuenta drafts)."""
         result = await self.session.execute(
             select(CreditApplication).where(
                 CreditApplication.company_id == company_id,
-                CreditApplication.status == CreditApplicationStatus.pending,
+                col(CreditApplication.status).in_(
+                    [
+                        CreditApplicationStatus.pending,
+                        CreditApplicationStatus.in_review,
+                    ]
+                ),
             )
         )
         return result.scalars().first() is not None

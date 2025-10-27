@@ -7,6 +7,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
+        extra="ignore",
     )
     project_url: str = Field(alias="SUPABASE_URL", default="")
     supabase_service_key: str = Field(alias="SUPABASE_SECRET_KEY", default="")

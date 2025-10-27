@@ -38,6 +38,3 @@ api_v1_router.include_router(credit_applications.router)
 api_v1_router.include_router(documents.router)
 api_v1_router.include_router(metadata.router)
 app.include_router(api_v1_router)
-
-# Webhooks (public, no /api/v1 prefix)
-app.include_router(documents.webhook_router)
