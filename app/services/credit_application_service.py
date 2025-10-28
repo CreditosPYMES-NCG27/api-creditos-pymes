@@ -1,4 +1,3 @@
-from datetime import datetime, timezone
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -329,7 +328,3 @@ class CreditApplicationService(BaseService):
                     f"approved_amount ({approved_amount}) no puede ser mayor que "
                     f"requested_amount ({existing_app.requested_amount})"
                 )
-
-        # Fijar reviewed_at si no viene
-        if "reviewed_at" not in update_data:
-            update_data["reviewed_at"] = datetime.now(timezone.utc)
