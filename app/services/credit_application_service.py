@@ -109,8 +109,8 @@ class CreditApplicationService(BaseService):
             )
 
         # Verificar si hay solicitudes pendientes (no contar drafts)
-        if await self.app_repo.check_company_has_pending_application(company.id):
-            raise ValidationDomainError("Ya tienes una solicitud pendiente")
+        # if await self.app_repo.check_company_has_pending_application(company.id):
+        #     raise ValidationDomainError("Ya tienes una solicitud pendiente")
 
         # Validar que si purpose es 'other', purpose_other sea requerido
         if application.purpose == CreditApplicationPurpose.other:
