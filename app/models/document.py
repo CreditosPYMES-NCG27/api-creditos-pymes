@@ -5,7 +5,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import TIMESTAMP
 from sqlmodel import JSON, Column, Enum, Field, ForeignKeyConstraint, SQLModel, func
 
-from app.core.enums import DocumentType, SignatureStatus
+from app.core.enums import DocumentStatus, DocumentType, SignatureStatus
 
 
 class Document(SQLModel, table=True):
@@ -40,6 +40,19 @@ class Document(SQLModel, table=True):
             nullable=True,
         ),
     )
+    status: DocumentStatus = Field(
+        default=DocumentStatus.pending,
+        sa_column=Column(
+            Enum(
+                DocumentStatus,
+                name="document_status",
+                native_enum=True,
+                create_type=False,
+            ),
+            nullable=False,
+            server_default="pending",
+        ),
+    )
     extra_metadata: dict[str, Any] | None = Field(
         default=None,
         sa_type=JSON,
@@ -54,7 +67,7 @@ class Document(SQLModel, table=True):
             Enum(
                 SignatureStatus,
                 name="signature_status",
-                native_enum=False,
+                native_enum=True,
                 create_type=False,
             ),
             nullable=False,

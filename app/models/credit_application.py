@@ -43,14 +43,16 @@ class CreditApplication(SQLModel, table=True):
     purpose_other: str | None = Field(default=None)
     term_months: int = Field(nullable=False, ge=1, le=360)
     status: CreditApplicationStatus = Field(
-        default=CreditApplicationStatus.pending,
+        default=CreditApplicationStatus.draft,
         sa_column=Column(
             Enum(
                 CreditApplicationStatus,
                 name="credit_application_status",
                 native_enum=True,
                 create_type=False,
-            )
+            ),
+            nullable=False,
+            server_default="draft",
         ),
     )
     risk_score: Decimal | None = Field(

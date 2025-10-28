@@ -12,6 +12,7 @@ class UserRole(StrEnum):
 class CreditApplicationStatus(StrEnum):
     """Estados válidos para la solicitud de crédito."""
 
+    draft = "draft"
     pending = "pending"
     in_review = "in_review"
     approved = "approved"
@@ -38,6 +39,14 @@ class DocumentType(StrEnum):
     business_license = "business_license"
     bank_statement = "bank_statement"
     other = "other"
+
+
+class DocumentStatus(StrEnum):
+    """Estados válidos para documentos."""
+
+    pending = "pending"
+    approved = "approved"
+    rejected = "rejected"
 
 
 class SignatureStatus(StrEnum):

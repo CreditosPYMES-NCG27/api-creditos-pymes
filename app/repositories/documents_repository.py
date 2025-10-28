@@ -5,7 +5,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import desc, func, select
 
-from app.core.enums import SignatureStatus
+from app.core.enums import DocumentStatus, SignatureStatus
 from app.models.document import Document
 
 
@@ -118,6 +118,32 @@ class DocumentRepository:
         if signed_file_path:
             document.signed_file_path = signed_file_path
 
+        await self.session.commit()
+        await self.session.refresh(document)
+        return document
+
+    async def update_status(
+        self,
+        document_id: UUID,
+        status: DocumentStatus,
+    ) -> Document | None:
+        """Actualiza el status de revisión de un documento.
+
+        Args:
+            document_id: ID del documento
+            status: Nuevo estado (pending, approved, rejected)
+
+        Returns:
+            Document actualizado o None si no existe
+        """
+        result = await self.session.execute(
+            select(Document).where(Document.id == document_id)
+        )
+        document = result.scalars().first()
+        if not document:
+            return None
+
+        document.status = status
         await self.session.commit()
         await self.session.refresh(document)
         return document
