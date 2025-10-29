@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     hellosign_api_key: str = Field(alias="HELLOSIGN_API_KEY", default="")
     hellosign_client_id: str = Field(alias="HELLOSIGN_CLIENT_ID", default="")
 
+    # CORS configuration
+    prod_domain: str | None = Field(alias="PROD_DOMAIN", default=None)
+    environment: str = Field(alias="ENVIRONMENT", default="development")
+
 
 def get_settings() -> Settings:
     """Obtiene la configuración de la app."""

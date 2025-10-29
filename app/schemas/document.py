@@ -25,7 +25,7 @@ class DocumentResponse(BaseModel):
     ]
     status: Annotated[
         DocumentStatus,
-        Field(description="Estado de revisión: pending, approved, rejected, expired"),
+        Field(description="Estado de documento: pending, uploaded, approved, rejected"),
     ]
     signature_status: Annotated[SignatureStatus, Field(description="Estado de firma")]
     signature_request_id: Annotated[
@@ -71,5 +71,5 @@ class DocumentUpdate(BaseModel):
 
     status: Annotated[
         DocumentStatus,
-        Field(description="Nuevo estado: pending, approved, rejected, expired"),
+        Field(description="Nuevo estado: pending, approved, rejected"),
     ]
