@@ -171,9 +171,9 @@ class CreditApplicationService(BaseService):
                 user_company = await self.company_repo.get_by_user_id(UUID(user.sub))
                 if not user_company or existing_app.company_id != user_company.id:
                     raise ForbiddenError("No autorizado para editar esta solicitud")
-            else:
-                # Operators/admins no pueden editar drafts
-                raise ForbiddenError("No puede editar solicitudes en borrador")
+            # else:
+            #     # Operators/admins no pueden editar drafts
+            #     raise ForbiddenError("No puede editar solicitudes en borrador")
         else:
             # Para solicitudes ya enviadas (pending, in_review, etc.), solo operators/admins pueden editar
             if role not in (UserRole.operator, UserRole.admin):
