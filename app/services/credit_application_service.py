@@ -165,21 +165,36 @@ class CreditApplicationService(BaseService):
             raise NotFoundError("Solicitud no encontrada")
 
         # Verificar permisos según el estado y rol
-        if existing_app.status == CreditApplicationStatus.draft:
-            # Solo el applicant dueño puede editar un draft
-            if role == UserRole.applicant:
-                user_company = await self.company_repo.get_by_user_id(UUID(user.sub))
-                if not user_company or existing_app.company_id != user_company.id:
-                    raise ForbiddenError("No autorizado para editar esta solicitud")
-            # else:
-            #     # Operators/admins no pueden editar drafts
-            #     raise ForbiddenError("No puede editar solicitudes en borrador")
-        else:
-            # Para solicitudes ya enviadas (pending, in_review, etc.), solo operators/admins pueden editar
-            if role not in (UserRole.operator, UserRole.admin):
+        if role == UserRole.applicant:
+            # Applicants solo pueden enviar una solicitud: cambiar status de draft -> pending
+            user_company = await self.company_repo.get_by_user_id(UUID(user.sub))
+            if not user_company or existing_app.company_id != user_company.id:
+                raise ForbiddenError("No autorizado para editar esta solicitud")
+
+            # Si la aplicación está en draft, sólo se permite cambiar el campo 'status' a 'pending'
+            if existing_app.status == CreditApplicationStatus.draft:
+                # Debe incluir 'status' y no otros campos
+                if "status" not in update_data:
+                    raise ForbiddenError(
+                        "Los solicitantes solo pueden enviar la solicitud (cambiar a 'pending')"
+                    )
+                extra_fields = set(update_data.keys()) - {"status"}
+                if extra_fields:
+                    raise ForbiddenError(
+                        "Los solicitantes no pueden modificar otros campos"
+                    )
+                if update_data.get("status") != CreditApplicationStatus.pending:
+                    raise ForbiddenError(
+                        "Solo puede enviar la solicitud (cambiar a 'pending')"
+                    )
+            else:
+                # Para cualquier aplicación ya enviada, applicants no pueden modificarla
                 raise ForbiddenError(
-                    "No puede modificar una solicitud ya enviada. Solo operadores y administradores pueden hacerlo"
+                    "No puede cambiar el estado de una solicitud ya enviada"
                 )
+        else:
+            # Para operadores/administradores: pueden editar (la restricción previa fue removida)
+            pass
 
         # Validaciones de dominio
         await self._validate_application_update(existing_app, update_data, role)
@@ -205,14 +220,9 @@ class CreditApplicationService(BaseService):
             user_company = await self.company_repo.get_by_user_id(UUID(user.sub))
             if not user_company or existing_app.company_id != user_company.id:
                 raise ForbiddenError("No autorizado para eliminar esta solicitud")
-            # Applicants pueden borrar solicitudes en estado 'draft' o 'pending'
-            if existing_app.status not in (
-                CreditApplicationStatus.draft,
-                CreditApplicationStatus.pending,
-            ):
-                raise ForbiddenError(
-                    "Solo se pueden eliminar solicitudes en borrador o pendientes"
-                )
+            # Applicants pueden borrar solicitudes en estado 'draft' solamente
+            if existing_app.status != CreditApplicationStatus.draft:
+                raise ForbiddenError("Solo se pueden eliminar solicitudes en borrador")
 
         # Operators y admins pueden eliminar (operación permitida)
 
