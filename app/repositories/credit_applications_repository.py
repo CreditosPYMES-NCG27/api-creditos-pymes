@@ -105,3 +105,15 @@ class CreditApplicationRepository:
             )
         )
         return result.scalars().first() is not None
+
+    async def delete_application(self, application_id: UUID) -> bool:
+        """Elimina una aplicación por su ID. Devuelve True si se eliminó, False si no existe."""
+        result = await self.session.execute(
+            select(CreditApplication).where(CreditApplication.id == application_id)
+        )
+        application = result.scalars().first()
+        if not application:
+            return False
+        await self.session.delete(application)
+        await self.session.commit()
+        return True

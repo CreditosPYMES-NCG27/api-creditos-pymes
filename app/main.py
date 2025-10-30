@@ -2,6 +2,7 @@ from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.bootstrap import app_lifespan
+from app.config import get_settings
 from app.exception_handlers import register_exception_handlers
 from app.routers import companies, credit_applications, documents, metadata, profiles
 
@@ -17,6 +18,22 @@ app.add_middleware(
     allow_origins=[
         "https://automatic-adventure-4xvwg6r644xcj96w-5173.app.github.dev"
     ],  # your frontend Codespace URL
+# Configurar CORS
+settings = get_settings()
+
+# Lista base de orígenes permitidos para desarrollo local
+allowed_origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
+# Agregar dominio de producción si está configurado y en modo producción
+if settings.environment == "production" and settings.prod_domain:
+    allowed_origins.append(settings.prod_domain)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
