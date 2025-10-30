@@ -189,6 +189,37 @@ class CreditApplicationService(BaseService):
             raise ValidationDomainError("Error al actualizar la aplicación")
         return CreditApplicationResponse.model_validate(updated.model_dump())
 
+    async def delete_application(self, user: Principal, application_id: UUID) -> None:
+        """Elimina una aplicación de crédito según permisos:
+
+        - Applicants: solo pueden eliminar sus propias aplicaciones en estado 'draft' o 'pending'.
+        - Operators/Admins: pueden eliminar (permiso elevado).
+        """
+        role = await self.assert_role(user.sub)
+
+        existing_app = await self.app_repo.get_application_by_id(application_id)
+        if not existing_app:
+            raise NotFoundError("Solicitud no encontrada")
+
+        if role == UserRole.applicant:
+            user_company = await self.company_repo.get_by_user_id(UUID(user.sub))
+            if not user_company or existing_app.company_id != user_company.id:
+                raise ForbiddenError("No autorizado para eliminar esta solicitud")
+            # Applicants pueden borrar solicitudes en estado 'draft' o 'pending'
+            if existing_app.status not in (
+                CreditApplicationStatus.draft,
+                CreditApplicationStatus.pending,
+            ):
+                raise ForbiddenError(
+                    "Solo se pueden eliminar solicitudes en borrador o pendientes"
+                )
+
+        # Operators y admins pueden eliminar (operación permitida)
+
+        deleted = await self.app_repo.delete_application(application_id)
+        if not deleted:
+            raise ValidationDomainError("Error al eliminar la aplicación")
+
     async def _validate_application_update(
         self,
         existing_app: CreditApplication,

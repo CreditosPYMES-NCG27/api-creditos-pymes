@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 
 from app.core.enums import CreditApplicationStatus
 from app.dependencies.auth import CurrentUserDep
@@ -98,3 +98,19 @@ async def update_credit_application(
 ):
     """Actualizar parcialmente una solicitud de crédito (solo operadores)."""
     return await service.update_application(user, application_id, application)
+
+
+@router.delete("/{application_id}", status_code=204)
+async def delete_credit_application(
+    service: CreditApplicationServiceDep,
+    application_id: UUID,
+    user: CurrentUserDep,
+):
+    """Eliminar una solicitud de crédito.
+
+    - Applicants: solo pueden eliminar sus propias solicitudes en borrador o pendientes.
+    - Operators/Admins: pueden eliminar solicitudes.
+    Devuelve 204 No Content en caso de éxito.
+    """
+    await service.delete_application(user, application_id)
+    return Response(status_code=204)
