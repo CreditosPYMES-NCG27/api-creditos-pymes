@@ -239,8 +239,8 @@ class CreditApplicationService(BaseService):
         new_status = update_data.get("status", existing_app.status)
 
         # Validar transiciones de estado
-        if "status" in update_data:
-            self._validate_status_transition(existing_app.status, new_status, role)
+        # if "status" in update_data:
+        #     # self._validate_status_transition(existing_app.status, new_status, role)
 
         # Validaciones específicas por estado
         if new_status == CreditApplicationStatus.approved:
