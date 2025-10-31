@@ -29,6 +29,7 @@ async def app_lifespan(app: FastAPI):
 
     engine = create_async_engine(
         database_url,
+        pool_size=10,
         pool_pre_ping=True,
         pool_recycle=1800,
         echo=False,
