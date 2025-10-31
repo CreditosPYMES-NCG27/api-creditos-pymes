@@ -5,16 +5,12 @@ from jwt import PyJWKClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
 
-from app.config import get_settings
-
 
 @asynccontextmanager
 async def app_lifespan(app: FastAPI):
     """Inicializa recursos compartidos por la app, como el motor de base de datos y el JWKS client.
     Estos recursos se almacenan en `app.state` para que estén disponibles en los endpoints y dependencias.
     """
-    app.state.settings = get_settings()
-
     app.state.jwks_client = PyJWKClient(
         f"{app.state.settings.project_url}/auth/v1/.well-known/jwks.json",
         cache_keys=True,
