@@ -17,8 +17,9 @@ from dropbox_sign.models.sub_signature_request_signer import (
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings
-from app.core.enums import DocumentStatus, SignatureStatus, UserRole
+from app.core.enums import DocumentStatus, DocumentType, SignatureStatus, UserRole
 from app.core.errors import ForbiddenError, NotFoundError, ValidationDomainError
+from app.models.document import Document
 from app.repositories.documents_repository import DocumentRepository
 from app.repositories.protocols import DocumentRepositoryProtocol
 from app.schemas.document import (
@@ -145,6 +146,11 @@ class DocumentService(BaseService):
         if not document:
             raise NotFoundError("Documento no encontrado")
 
+        if document.status != DocumentStatus.uploaded:
+            raise ValidationDomainError(
+                "El documento debe estar en estado 'uploaded' para solicitar firma"
+            )
+
         # Verificar permisos: solo el dueño o admin/operator pueden solicitar firma
         user_role = await self.assert_role(user_sub)
         if user_role == UserRole.applicant and document.user_id != UUID(user_sub):
@@ -155,6 +161,11 @@ class DocumentService(BaseService):
             raise ForbiddenError("El documento ya está firmado")
 
         # Obtener URL del documento desde Supabase Storage
+        if document.storage_path is None or document.bucket_name is None:
+            raise ValidationDomainError(
+                "El documento no tiene ruta de almacenamiento válida"
+            )
+
         document_url = self._get_storage_signed_url(
             document.storage_path, document.bucket_name
         )
@@ -303,3 +314,42 @@ class DocumentService(BaseService):
             raise NotFoundError("Documento no encontrado")
 
         return DocumentResponse.model_validate(document, from_attributes=True)
+
+    async def request_document(
+        self,
+        user_sub: str,
+        application_id: UUID | None = None,
+        document_type: DocumentType | None = None,
+        notes: str | None = None,
+    ) -> DocumentResponse:
+        """Crea un placeholder de documento solicitado por un operador/admin.
+
+        Los campos de storage permanecen NULL hasta que el usuario suba el archivo
+        y el trigger/función complete los metadatos.
+        """
+        # Solo operadores/admins pueden solicitar documentos
+        user_role = await self.assert_role(user_sub)
+        if user_role not in (UserRole.admin, UserRole.operator):
+            raise ForbiddenError(
+                "Solo administradores y operadores pueden solicitar documentos"
+            )
+
+        # Crear modelo Document con campos de storage en NULL
+        from uuid import UUID as _UUID
+
+        doc = Document(
+            user_id=_UUID(user_sub),
+            application_id=application_id,
+            document_type=document_type,
+            storage_path=None,
+            bucket_name=None,
+            file_name=None,
+            status=DocumentStatus.requested,
+            extra_metadata={
+                "requested_by": str(user_sub),
+                "notes": notes,
+            },
+        )
+
+        created = await self.document_repo.create_document(doc)
+        return DocumentResponse.model_validate(created, from_attributes=True)

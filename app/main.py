@@ -13,19 +13,15 @@ app = FastAPI(
     lifespan=app_lifespan,
 )
 
-# Configurar CORS
 settings = get_settings()
+app.state.settings = settings
 
-# Lista base de orígenes permitidos para desarrollo local
-allowed_origins = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "https://automatic-adventure-4xvwg6r644xcj96w-5173.app.github.dev"
-]
-
-# Agregar dominio de producción si está configurado y en modo producción
-if settings.environment == "production" and settings.prod_domain:
-    allowed_origins.append(settings.prod_domain)
+if settings.environment == "production":
+    if not settings.prod_domain:
+        raise RuntimeError("PROD_DOMAIN debe estar configurado en production")
+    allowed_origins = [settings.prod_domain]
+else:
+    allowed_origins = ["*"]
 
 app.add_middleware(
     CORSMiddleware,
