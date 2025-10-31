@@ -346,15 +346,6 @@ class CreditApplicationService(BaseService):
         Raises:
             ValidationDomainError: Si se violan las reglas
         """
-        # approved_amount es obligatorio
-        if (
-            "approved_amount" not in update_data
-            and existing_app.approved_amount is None
-        ):
-            raise ValidationDomainError(
-                "approved_amount es requerido cuando el status es 'approved'"
-            )
-
         # interest_rate es obligatorio
         if "interest_rate" not in update_data and existing_app.interest_rate is None:
             raise ValidationDomainError(
