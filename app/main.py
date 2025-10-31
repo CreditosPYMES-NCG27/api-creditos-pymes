@@ -13,11 +13,6 @@ app = FastAPI(
     lifespan=app_lifespan,
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "https://automatic-adventure-4xvwg6r644xcj96w-5173.app.github.dev"
-    ],  # your frontend Codespace URL
 # Configurar CORS
 settings = get_settings()
 
@@ -25,6 +20,7 @@ settings = get_settings()
 allowed_origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    "https://automatic-adventure-4xvwg6r644xcj96w-5173.app.github.dev"
 ]
 
 # Agregar dominio de producción si está configurado y en modo producción
