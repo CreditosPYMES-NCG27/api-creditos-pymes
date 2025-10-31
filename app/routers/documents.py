@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends
 from app.dependencies.auth import CurrentUserDep
 from app.dependencies.services import DocumentServiceDep
 from app.schemas.document import (
+    DocumentRequest,
     DocumentResponse,
     DocumentUpdate,
     SignatureRequest,
@@ -85,4 +86,19 @@ async def update_document_status(
         document_id=document_id,
         status=document_update.status,
         user_sub=user.sub,
+    )
+
+
+@router.post("/request", response_model=DocumentResponse)
+async def request_document(
+    service: DocumentServiceDep,
+    payload: DocumentRequest,
+    user: CurrentUserDep,
+):
+    """Crear una solicitud de documento (placeholder). Solo operadores/admins."""
+    return await service.request_document(
+        user_sub=user.sub,
+        application_id=payload.application_id,
+        document_type=payload.document_type,
+        notes=payload.notes,
     )
