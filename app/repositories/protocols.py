@@ -133,3 +133,7 @@ class DocumentRepositoryProtocol(Protocol):
     ) -> Document | None:
         """Update document review status (pending, approved, rejected, expired)"""
         ...
+
+    async def create_document(self, document: Document) -> Document:
+        """Create a new document record (placeholder or actual upload)."""
+        ...

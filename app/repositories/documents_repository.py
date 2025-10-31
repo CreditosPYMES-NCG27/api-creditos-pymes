@@ -147,3 +147,10 @@ class DocumentRepository:
         await self.session.commit()
         await self.session.refresh(document)
         return document
+
+    async def create_document(self, document: Document) -> Document:
+        """Crea un nuevo registro de documento (placeholder o real)."""
+        self.session.add(document)
+        await self.session.commit()
+        await self.session.refresh(document)
+        return document

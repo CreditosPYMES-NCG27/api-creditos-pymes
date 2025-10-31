@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -15,9 +15,9 @@ class DocumentResponse(BaseModel):
     application_id: Annotated[
         UUID | None, Field(description="ID de solicitud asociada (opcional)")
     ]
-    storage_path: Annotated[str, Field(description="Ruta en storage")]
-    bucket_name: Annotated[str, Field(description="Bucket de storage")]
-    file_name: Annotated[str, Field(description="Nombre del archivo")]
+    storage_path: Annotated[str | None, Field(description="Ruta en storage")]
+    bucket_name: Annotated[str | None, Field(description="Bucket de storage")]
+    file_name: Annotated[str | None, Field(description="Nombre del archivo")]
     file_size: Annotated[int | None, Field(description="Tamaño en bytes")]
     mime_type: Annotated[str | None, Field(description="Tipo MIME")]
     document_type: Annotated[
@@ -26,6 +26,9 @@ class DocumentResponse(BaseModel):
     status: Annotated[
         DocumentStatus,
         Field(description="Estado de documento: pending, uploaded, approved, rejected"),
+    ]
+    extra_metadata: Annotated[
+        dict[str, Any] | None, Field(description="Metadata adicional del documento")
     ]
     signature_status: Annotated[SignatureStatus, Field(description="Estado de firma")]
     signature_request_id: Annotated[
@@ -73,3 +76,15 @@ class DocumentUpdate(BaseModel):
         DocumentStatus,
         Field(description="Nuevo estado: pending, approved, rejected"),
     ]
+
+
+class DocumentRequest(BaseModel):
+    """Schema para solicitar un documento (placeholder)
+
+    Solo operadores/administradores pueden llamar a este endpoint. Los campos
+    relacionados al archivo quedan en NULL hasta que el usuario suba el fichero.
+    """
+
+    application_id: Annotated[UUID, Field(description="ID de solicitud asociada")]
+    document_type: Annotated[DocumentType, Field(description="Tipo de documento")]
+    notes: Annotated[str, Field(description="Notas adicionales")]
