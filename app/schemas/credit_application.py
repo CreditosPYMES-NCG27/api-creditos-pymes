@@ -15,6 +15,14 @@ class CreditApplicationCreate(BaseModel):
         Decimal, Field(..., gt=0, description="Monto solicitado")
     ]
     term_months: Annotated[int, Field(..., ge=1, le=360, description="Plazo en meses")]
+    interest_rate: Annotated[Decimal, Field(10, gt=0, description="Tasa de interés")]
+    status: Annotated[
+        CreditApplicationStatus,
+        Field(
+            CreditApplicationStatus.pending,
+            description="Estado de la solicitud (por defecto pending, puede ser draft)",
+        ),
+    ]
     purpose: Annotated[
         CreditApplicationPurpose, Field(..., description="Propósito del crédito")
     ]
@@ -24,23 +32,31 @@ class CreditApplicationCreate(BaseModel):
 class CreditApplicationUpdate(BaseModel):
     """Modelo para actualizar una solicitud (solo operadores)"""
 
-    status: Annotated[
-        CreditApplicationStatus | None, Field(None, description="Nuevo estado")
+    requested_amount: Annotated[
+        Decimal | None, Field(None, gt=0, description="Monto solicitado")
     ]
-    risk_score: Annotated[
-        Decimal | None, Field(None, ge=0, le=100, description="Puntaje de riesgo")
-    ]
-    approved_amount: Annotated[
-        Decimal | None, Field(None, gt=0, description="Monto aprobado")
+    term_months: Annotated[
+        int | None, Field(None, ge=1, le=360, description="Plazo en meses")
     ]
     interest_rate: Annotated[
-        Decimal | None, Field(None, ge=0, description="Tasa de interés")
+        Decimal | None, Field(None, gt=0, description="Tasa de interés")
+    ]
+    status: Annotated[
+        CreditApplicationStatus | None, Field(None, description="Nuevo estado")
     ]
     purpose: Annotated[
         CreditApplicationPurpose | None,
         Field(None, description="Propósito del crédito"),
     ]
     purpose_other: Annotated[str | None, Field(None, description="Otro propósito")]
+    risk_score: Annotated[
+        Decimal | None,
+        Field(None, ge=0, le=100, description="Puntaje de riesgo (solo operadores)"),
+    ]
+    approved_amount: Annotated[
+        Decimal | None,
+        Field(None, gt=0, description="Monto aprobado (solo operadores)"),
+    ]
 
 
 class CreditApplicationResponse(BaseModel):

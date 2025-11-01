@@ -96,7 +96,17 @@ async def update_credit_application(
     application: CreditApplicationUpdate,
     user: CurrentUserDep,
 ):
-    """Actualizar parcialmente una solicitud de crédito (solo operadores)."""
+    """Actualizar parcialmente una solicitud de crédito.
+
+    applicants:
+    - Pueden cambiar estado de draft a pending y draft a draf.
+    - Pueden cambiar el resto de campos si el estado de la solicitud es draft, si es pending no pueden.
+    - No pueden cambiar approved_amount ni risk_score.
+
+    operators/admin:
+    - Pueden cambiar el estado el estado de todas las solicitudes que no sean draft a cualquier otro estado excepto draft.
+    - Pueden cambiar todos los demás campos.
+    """
     return await service.update_application(user, application_id, application)
 
 
