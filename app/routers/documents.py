@@ -77,7 +77,8 @@ async def update_document_status(
 ):
     """Actualiza el status de revisión de un documento (solo admin/operator).
 
-    Permite cambiar el estado de un documento entre: pending, approved, rejected.
+    Permite cambiar el estado de un documento entre: approved, rejected.
+    Nota: "uploaded" lo establece el sistema cuando el usuario sube el archivo.
     Solo usuarios con rol admin u operator pueden actualizar el status.
     """
     return await service.update_document_status(

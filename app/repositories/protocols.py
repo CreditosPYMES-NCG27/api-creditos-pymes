@@ -81,6 +81,10 @@ class CreditApplicationRepositoryProtocol(Protocol):
         """Update credit application data"""
         ...
 
+    async def delete_application(self, application_id: UUID) -> bool:
+        """Delete a credit application by ID. Returns True if deleted, False if not found."""
+        ...
+
 
 class DocumentRepositoryProtocol(Protocol):
     """Protocol for document repository operations"""
