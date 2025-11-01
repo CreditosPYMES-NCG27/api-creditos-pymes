@@ -146,11 +146,6 @@ class DocumentService(BaseService):
         if not document:
             raise NotFoundError("Documento no encontrado")
 
-        if document.status != DocumentStatus.uploaded:
-            raise ValidationDomainError(
-                "El documento debe estar en estado 'uploaded' para solicitar firma"
-            )
-
         # Verificar permisos: solo el dueño o admin/operator pueden solicitar firma
         user_role = await self.assert_role(user_sub)
         if user_role == UserRole.applicant and document.user_id != UUID(user_sub):
