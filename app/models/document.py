@@ -21,9 +21,13 @@ class Document(SQLModel, table=True):
     application_id: UUID | None = Field(default=None, index=True)
 
     # Info desde storage.objects
-    storage_path: str = Field(nullable=False, unique=True, index=True)
-    bucket_name: str = Field(max_length=100, nullable=False)
-    file_name: str = Field(max_length=255, nullable=False)
+    # Permitir NULL para permitir registros "request" (placeholders) antes de que el
+    # archivo sea subido y el trigger complete los campos reales.
+    storage_path: str | None = Field(
+        default=None, nullable=True, unique=True, index=True
+    )
+    bucket_name: str | None = Field(default=None, max_length=100, nullable=True)
+    file_name: str | None = Field(default=None, max_length=255, nullable=True)
     file_size: int | None = Field(default=None, ge=0)
     mime_type: str | None = Field(default=None, max_length=100)
 
@@ -56,7 +60,6 @@ class Document(SQLModel, table=True):
     extra_metadata: dict[str, Any] | None = Field(
         default=None,
         sa_type=JSON,
-        alias="metadata",
     )
 
     # Firma digital

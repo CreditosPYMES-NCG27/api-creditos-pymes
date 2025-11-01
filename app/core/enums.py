@@ -44,6 +44,7 @@ class DocumentType(StrEnum):
 class DocumentStatus(StrEnum):
     """Estados válidos para documentos."""
 
+    requested = "requested"
     uploaded = "uploaded"
     pending = "pending"
     approved = "approved"

@@ -99,35 +99,6 @@ class CreditApplicationService(BaseService):
             meta=meta,
         )
 
-    async def create_application(
-        self, application: CreditApplicationCreate, user: Principal
-    ) -> CreditApplicationResponse:
-        company = await self.company_repo.get_by_user_id(UUID(user.sub))
-        if not company:
-            raise ValidationDomainError(
-                "Debes registrar una empresa antes de solicitar crédito"
-            )
-
-        # Verificar si hay solicitudes pendientes (no contar drafts)
-        # if await self.app_repo.check_company_has_pending_application(company.id):
-        #     raise ValidationDomainError("Ya tienes una solicitud pendiente")
-
-        # Validar que si purpose es 'other', purpose_other sea requerido
-        if application.purpose == CreditApplicationPurpose.other:
-            if not application.purpose_other or not application.purpose_other.strip():
-                raise ValidationDomainError(
-                    "purpose_other es requerido cuando purpose es 'other'"
-                )
-
-        data = application.model_dump()
-        data["company_id"] = company.id
-        # Las nuevas solicitudes siempre empiezan en draft
-        data["status"] = CreditApplicationStatus.draft
-
-        app_model = CreditApplication(**data)
-        created = await self.app_repo.create_application(app_model)
-        return CreditApplicationResponse.model_validate(created.model_dump())
-
     async def get_application_by_id(
         self, application_id: UUID, user: Principal
     ) -> CreditApplicationResponse:
@@ -143,65 +114,113 @@ class CreditApplicationService(BaseService):
         # Operators/admins pueden ver todas
         return CreditApplicationResponse.model_validate(application.model_dump())
 
+    async def create_application(
+        self, application: CreditApplicationCreate, user: Principal
+    ) -> CreditApplicationResponse:
+        user_role = await self.assert_role(user.sub)
+
+        if user_role is not UserRole.applicant:
+            print(user_role)
+            raise ForbiddenError(
+                "Solo los solicitantes pueden crear solicitudes de crédito"
+            )
+
+        company = await self.company_repo.get_by_user_id(UUID(user.sub))
+
+        if not company:
+            raise ValidationDomainError(
+                "Debes registrar una empresa antes de solicitar crédito"
+            )
+
+        if application.status not in {
+            CreditApplicationStatus.pending,
+            CreditApplicationStatus.draft,
+        }:
+            raise ValidationDomainError(
+                f"Estado {application.status} no permitido para solicitantes"
+            )
+
+        if (
+            application.purpose is CreditApplicationPurpose.other
+            and not application.purpose_other
+        ):
+            raise ValidationDomainError(
+                "El campo 'purpose_other' es requerido cuando 'purpose' se establece en 'other'"
+            )
+
+        data = application.model_dump()
+        data["company_id"] = company.id
+        app_model = CreditApplication(**data)
+        created = await self.app_repo.create_application(app_model)
+        return CreditApplicationResponse.model_validate(created.model_dump())
+
     async def update_application(
         self,
         user: Principal,
         application_id: UUID,
         application: CreditApplicationUpdate,
     ) -> CreditApplicationResponse:
-        # Obtener rol primero (para tests que mockean assert_role)
-        role = await self.assert_role(user.sub)
-
+        """Actualiza parcialmente una aplicación de crédito según permisos:
+        - Applicants: pueden editar sus propias solicitudes en estado 'draft'. No pueden editar solicitudes en estado 'pending' o superior.
+        - Operators/Admins: pueden editar cualquier solicitud que no esté en estado 'draft'.
+        """
+        user_role = await self.assert_role(user.sub)
+        user_company = await self.company_repo.get_by_user_id(UUID(user.sub))
+        existing_app = await self.app_repo.get_application_by_id(application_id)
         update_data = {
             k: v for k, v in application.model_dump().items() if v is not None
         }
 
-        if not update_data:
-            raise ValidationDomainError("No se proporcionaron campos para actualizar")
+        if not user_company:
+            raise ForbiddenError("Usuario no tiene ninguna empresa registrada")
 
-        # Obtener la aplicación existente
-        existing_app = await self.app_repo.get_application_by_id(application_id)
         if not existing_app:
             raise NotFoundError("Solicitud no encontrada")
 
-        # Verificar permisos según el estado y rol
-        if role == UserRole.applicant:
-            # Applicants solo pueden enviar una solicitud: cambiar status de draft -> pending
-            user_company = await self.company_repo.get_by_user_id(UUID(user.sub))
-            if not user_company or existing_app.company_id != user_company.id:
-                raise ForbiddenError("No autorizado para editar esta solicitud")
+        if existing_app.company_id != user_company.id:
+            raise ForbiddenError("Solicitud no pertenece a este usuario")
 
-            # Si la aplicación está en draft, sólo se permite cambiar el campo 'status' a 'pending'
-            if existing_app.status == CreditApplicationStatus.draft:
-                # Debe incluir 'status' y no otros campos
-                if "status" not in update_data:
-                    raise ForbiddenError(
-                        "Los solicitantes solo pueden enviar la solicitud (cambiar a 'pending')"
-                    )
-                extra_fields = set(update_data.keys()) - {"status"}
-                if extra_fields:
-                    raise ForbiddenError(
-                        "Los solicitantes no pueden modificar otros campos"
-                    )
-                if update_data.get("status") != CreditApplicationStatus.pending:
-                    raise ForbiddenError(
-                        "Solo puede enviar la solicitud (cambiar a 'pending')"
-                    )
-            else:
-                # Para cualquier aplicación ya enviada, applicants no pueden modificarla
+        if user_role == UserRole.applicant:
+            if existing_app.status == CreditApplicationStatus.pending:
+                raise ForbiddenError("No puede editar una solicitud ya enviada")
+
+            if application.status not in {
+                CreditApplicationStatus.pending,
+                CreditApplicationStatus.draft,
+            }:
                 raise ForbiddenError(
-                    "No puede cambiar el estado de una solicitud ya enviada"
+                    f"Estado {application.status} no permitido para solicitantes"
                 )
-        else:
-            # Para operadores/administradores: pueden editar (la restricción previa fue removida)
-            pass
+            # Debemos ignorar risk_score y approved_amount si el user_role es applicant
+            update_data.pop("risk_score", None)
+            update_data.pop("approved_amount", None)
+        elif user_role == UserRole.operator or user_role == UserRole.admin:
+            if existing_app.status == CreditApplicationStatus.draft:
+                raise ForbiddenError(
+                    "Los operadores/administradores no pueden modificar solicitudes en borrador"
+                )
 
-        # Validaciones de dominio
-        await self._validate_application_update(existing_app, update_data, role)
+            if application.status == CreditApplicationStatus.draft:
+                raise ForbiddenError(
+                    "Estado no permitido para operadores/administradores"
+                )
+
+        if (
+            application.purpose is CreditApplicationPurpose.other
+            and not application.purpose_other
+        ):
+            raise ValidationDomainError(
+                "El campo 'purpose_other' es requerido cuando 'purpose' se establece en 'other'"
+            )
+
+        if not update_data:
+            raise ValidationDomainError("No se proporcionaron campos para actualizar")
 
         updated = await self.app_repo.update_application(application_id, update_data)
+
         if not updated:
             raise ValidationDomainError("Error al actualizar la aplicación")
+
         return CreditApplicationResponse.model_validate(updated.model_dump())
 
     async def delete_application(self, user: Principal, application_id: UUID) -> None:
@@ -229,143 +248,3 @@ class CreditApplicationService(BaseService):
         deleted = await self.app_repo.delete_application(application_id)
         if not deleted:
             raise ValidationDomainError("Error al eliminar la aplicación")
-
-    async def _validate_application_update(
-        self,
-        existing_app: CreditApplication,
-        update_data: dict,
-        role: UserRole | None = None,
-    ) -> None:
-        """Valida las reglas de negocio para actualizar una aplicación de crédito.
-
-        Args:
-            existing_app: La aplicación existente antes de la actualización
-            update_data: Los datos que se van a actualizar
-            role: Rol del usuario que realiza la actualización (opcional)
-
-        Raises:
-            ValidationDomainError: Si se violan las reglas de negocio
-        """
-        new_status = update_data.get("status", existing_app.status)
-
-        # Validar transiciones de estado
-        # if "status" in update_data:
-        #     # self._validate_status_transition(existing_app.status, new_status, role)
-
-        # Validaciones específicas por estado
-        if new_status == CreditApplicationStatus.approved:
-            self._validate_approved_status(update_data, existing_app)
-
-        # Validar cambio de purpose a "other"
-        if "purpose" in update_data:
-            new_purpose = update_data["purpose"]
-            if new_purpose == CreditApplicationPurpose.other:
-                if (
-                    "purpose_other" not in update_data
-                    or not update_data["purpose_other"]
-                ):
-                    raise ValidationDomainError(
-                        "purpose_other es requerido cuando purpose es 'other'"
-                    )
-
-        # Si approved_amount está presente, debe ser válido
-        if "approved_amount" in update_data:
-            approved_amount = update_data["approved_amount"]
-            if approved_amount <= 0:
-                raise ValidationDomainError("approved_amount debe ser mayor que 0")
-            if approved_amount > existing_app.requested_amount:
-                raise ValidationDomainError(
-                    f"approved_amount ({approved_amount}) no puede ser mayor que "
-                    f"requested_amount ({existing_app.requested_amount})"
-                )
-
-        # Si interest_rate está presente, debe ser válido
-        # (validación ge=0 ya cubierta por el schema)
-
-    def _validate_status_transition(
-        self,
-        current_status: CreditApplicationStatus,
-        new_status: CreditApplicationStatus,
-        role: UserRole | None = None,
-    ) -> None:
-        """Valida que las transiciones de estado sean válidas.
-
-        Args:
-            current_status: Estado actual
-            new_status: Nuevo estado
-            role: Rol del usuario que realiza la transición (opcional)
-
-        Raises:
-            ValidationDomainError: Si la transición no es válida
-        """
-        # Applicants solo pueden cambiar de draft a pending
-        if role == UserRole.applicant:
-            if current_status == CreditApplicationStatus.draft:
-                if new_status != CreditApplicationStatus.pending:
-                    raise ValidationDomainError(
-                        "Solo puede enviar la solicitud (cambiar a 'pending')"
-                    )
-            else:
-                raise ValidationDomainError(
-                    "No puede cambiar el estado de una solicitud ya enviada"
-                )
-            return
-
-        # Transiciones válidas para operators/admins
-        valid_transitions = {
-            CreditApplicationStatus.draft: [],  # Operators/admins no pueden tocar drafts
-            CreditApplicationStatus.pending: [
-                CreditApplicationStatus.in_review,
-                CreditApplicationStatus.approved,
-                CreditApplicationStatus.rejected,
-            ],
-            CreditApplicationStatus.in_review: [
-                CreditApplicationStatus.approved,
-                CreditApplicationStatus.rejected,
-            ],
-            CreditApplicationStatus.approved: [],  # No se puede cambiar una vez aprobado
-            CreditApplicationStatus.rejected: [],  # No se puede cambiar una vez rechazado
-        }
-
-        if new_status not in valid_transitions[current_status]:
-            raise ValidationDomainError(
-                f"Transición de estado no válida: {current_status} → {new_status}. "
-                f"Transiciones permitidas desde {current_status}: "
-                f"{[valid_status for valid_status in valid_transitions[current_status]]}"
-            )
-
-    def _validate_approved_status(
-        self, update_data: dict, existing_app: CreditApplication
-    ) -> None:
-        """Valida reglas específicas cuando el estado cambia a approved.
-
-        Args:
-            update_data: Datos de actualización
-            existing_app: Aplicación existente
-
-        Raises:
-            ValidationDomainError: Si se violan las reglas
-        """
-        # approved_amount es obligatorio
-        if (
-            "approved_amount" not in update_data
-            and existing_app.approved_amount is None
-        ):
-            raise ValidationDomainError(
-                "approved_amount es requerido cuando el status es 'approved'"
-            )
-
-        # interest_rate es obligatorio
-        if "interest_rate" not in update_data and existing_app.interest_rate is None:
-            raise ValidationDomainError(
-                "interest_rate es requerido cuando el status es 'approved'"
-            )
-
-        # Validar approved_amount <= requested_amount (si está presente)
-        if "approved_amount" in update_data:
-            approved_amount = update_data["approved_amount"]
-            if approved_amount > existing_app.requested_amount:
-                raise ValidationDomainError(
-                    f"approved_amount ({approved_amount}) no puede ser mayor que "
-                    f"requested_amount ({existing_app.requested_amount})"
-                )
