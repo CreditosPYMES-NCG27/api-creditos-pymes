@@ -5,8 +5,9 @@ API REST para gestión de solicitudes de crédito a PyMEs, desarrollada con Fast
 ## 📋 Requisitos
 
 - Python 3.13+
-- UV (gestor de paquetes)
-- Base de datos PostgreSQL accesible (puede ser Supabase)
+- UV (gestor de paquetes y entorno virtual)
+- Cuenta de Supabase (base de datos PostgreSQL y autenticación)
+- Cuenta de HelloSign/Dropbox Sign (para firma electrónica de documentos)
 
 ## 🚀 Instalación
 
@@ -49,9 +50,54 @@ HELLOSIGN_CLIENT_ID=your_hellosign_client_id
 ```
 
 **Notas importantes:**
+- `SUPABASE_URL`: URL de tu proyecto Supabase (ej: `https://xxxxx.supabase.co`)
 - `SUPABASE_SECRET_KEY`: La **service_role key** de tu proyecto Supabase (Settings → API)
 - `HELLOSIGN_API_KEY` y `HELLOSIGN_CLIENT_ID`: Obtenerlos en [HelloSign API Settings](https://app.hellosign.com/home/myAccount#api)
-- Para configurar webhooks de HelloSign, consulta [`docs/HELLOSIGN_WEBHOOK.md`](docs/HELLOSIGN_WEBHOOK.md)
+- La API utiliza Supabase Auth para autenticación JWT y Supabase Storage para almacenamiento de documentos
+
+## 🗄️ Configuración de la Base de Datos
+
+### Paso 1: Inicializar el esquema
+
+1. Abre tu proyecto en **Supabase Dashboard**
+2. Ve a **SQL Editor** (icono de base de datos en el menú lateral)
+3. Abre el archivo `init_db.sql` de este repositorio
+4. Copia todo su contenido y pégalo en el editor SQL
+5. Haz clic en **Run** para ejecutar el script
+
+El script creará automáticamente:
+- ✅ Tipos ENUM personalizados
+- ✅ Tablas con constraints e índices
+- ✅ Funciones PL/pgSQL
+- ✅ Triggers para automatización
+
+### Paso 2: Configurar Custom Access Token Hook
+
+Este paso es **crucial** para que el sistema de roles funcione correctamente.
+
+1. Ve a **Authentication → Hooks** en Supabase Dashboard
+2. Selecciona **Custom Access Token Hook**
+3. En el campo **Hook Name**, ingresa: `custom_access_token_hook`
+4. En **Schema**, selecciona: `public`
+5. Haz clic en **Enable Hook**
+
+Esto inyectará automáticamente el `user_role` en el JWT de cada usuario.
+
+### Paso 3: Habilitar Row Level Security (RLS)
+
+Por defecto, las tablas no tienen RLS activado. Para evitar accesos no autorizados, habilítalo:
+
+1. Ve a **Authentication → Policies** en Supabase Dashboard
+2. Para cada tabla (`profiles`, `companies`, `credit_applications`, `documents`):
+   - Haz clic en **Enable RLS**
+
+### Paso 4: Migrar claves de API
+
+Este proyecto utiliza las nuevas API Keys de Supabase, por lo cual es necesario ir a la configuración del proyecto en Supabase Dashboard, deshabilitar las claves legacy  (anon y service_role) y habilitar las nuevas API Keys (publishable y secret).
+
+### Paso 5: Migrar JWT Secret a JWT Signing Key
+
+Este proyecto utiliza JWKS para validar los tokens JWT emitidos por Supabase Auth. Para configurar esto necesitas migrar la clave secreta JWT a una clave de firma asimétrica desde la configuración del proyecto en Supabase Dashboard.
 
 ## 🏃 Ejecución
 
@@ -65,96 +111,44 @@ La API estará disponible en: `http://localhost:8000`
 
 ## 📚 Documentación de la API
 
-Una vez iniciado el servidor, accede a:
+**Para la especificación completa de la API**, incluyendo todos los endpoints, esquemas de datos, flujos de negocio y ejemplos, consulta: **[SPECIFICATION.md](./SPECIFICATION.md)**
+
+Una vez iniciado el servidor, también puedes acceder a la documentación interactiva:
 
 - **Swagger UI (interactiva)**: http://localhost:8000/docs
 - **ReDoc (documentación)**: http://localhost:8000/redoc
 
-## 🛠️ Estructura del Proyecto (resumen)
+## 🛠️ Estructura del Proyecto
 
 ```
-api-creditos-pymes/
-├── app/
-│   ├── main.py              # Punto de entrada de la aplicación
-│   ├── config.py            # Configuración y variables de entorno
-│   ├── bootstrap.py         # Lifespan (DB y JWKS)
-│   ├── exception_handlers.py# Mapeo de errores de dominio a HTTP
-│   ├── core/                # Enums y errores
-│   ├── dependencies/        # Dependencias (auth, db, services)
-│   ├── schemas/             # Modelos Pydantic (esquemas de datos)
-│   │   ├── company.py
-│   │   ├── credit_application.py
-│   │   ├── profile.py
-│   │   └── __init__.py
-│   ├── repositories/        # Acceso a datos (SQLModel/SQLAlchemy)
-│   │   ├── companies_repository.py
-│   │   ├── credit_applications_repository.py
-│   │   ├── profiles_repository.py
-│   │   └── __init__.py
-│   ├── routers/             # Endpoints por módulo
-│   │   ├── companies.py
-│   │   ├── credit_applications.py
-│   │   ├── metadata.py
-│   │   ├── profiles.py
-│   │   └── __init__.py
-│   └── services/            # Lógica de negocio
-│       ├── company_service.py
-│       ├── credit_application_service.py
-│       ├── profile_service.py
-│       └── __init__.py
-├── .env                     # Variables de entorno (no incluir en git)
-├── .env.example             # Plantilla de variables de entorno
-├── pyproject.toml           # Configuración del proyecto
-└── README.md
+📂api-creditos-pymes/
+├── 📂app/
+│   ├── 📂core/                # Enums y errores de dominio
+│   ├── 📂dependencies/        # Dependencias (auth, db, services)
+│   ├── 📂models/              # Modelos SQLModel (entidades de BD)
+│   ├── 📂schemas/             # Schemas Pydantic (request/response)
+│   ├── 📂repositories/        # Acceso a datos (capa de persistencia)
+│   ├── 📂routers/             # Endpoints por módulo
+│   ├── 📂services/            # Lógica de negocio
+│   ├── 🐍main.py              # Punto de entrada de la aplicación
+│   ├── 🐍config.py            # Configuración y variables de entorno
+│   ├── 🐍bootstrap.py         # Lifespan (DB y JWKS)
+│   └── 🐍exception_handlers.py# Mapeo de errores de dominio a HTTP
+├── 🔑.env.example             # Plantilla de variables de entorno
+├── 📜init_db.sql              # Script de inicialización de BD
+├── ⚙️pyproject.toml           # Configuración del proyecto y dependencias
+├── 📑README.md                # Este archivo
+└── 📄SPECIFICATION.md         # Especificación técnica completa de la API
 ```
-
-Para detalles completos, consulta `SPECIFICATION.md`.
-
-## 📝 Endpoints Disponibles (implementados)
-
-### Raíz y Health Check
-
-| Método | Endpoint       | Descripción                 |
-| ------ | -------------- | --------------------------- |
-| GET    | `/`            | Estado de la API            |
-| GET    | `/health`      | Health check de la API      |
-
-### Perfiles (Auth)
-
-| Método | Endpoint              | Descripción                              |
-| ------ | --------------------- | ---------------------------------------- |
-| GET    | `/api/v1/profiles/me` | Obtener perfil del usuario autenticado   |
-
-### Empresas
-
-| Método | Endpoint                    | Descripción                              |
-| ------ | --------------------------- | ---------------------------------------- |
-| GET    | `/api/v1/companies/`        | Listar empresas (paginado)              |
-| GET    | `/api/v1/companies/{id}`    | Obtener empresa por ID                  |
-| GET    | `/api/v1/companies/me`      | Obtener empresa del usuario autenticado |
-| PATCH  | `/api/v1/companies/me`      | Actualizar parcialmente tu empresa      |
-
-### Solicitudes de Crédito
-
-| Método | Endpoint                              | Descripción                              |
-| ------ | ------------------------------------- | ---------------------------------------- |
-| GET    | `/api/v1/credit-applications/`        | Listar solicitudes (filtros y paginación) |
-| POST   | `/api/v1/credit-applications/`        | Crear nueva solicitud                    |
-| GET    | `/api/v1/credit-applications/{id}`    | Obtener solicitud por ID                 |
-| PATCH  | `/api/v1/credit-applications/{id}`    | Actualizar solicitud (operadores/admin)  |
-
-### Metadatos
-
-| Método | Endpoint                          | Descripción                              |
-| ------ | --------------------------------- | ---------------------------------------- |
-| GET    | `/api/v1/metadata/credit-purposes`| Listar propósitos válidos de crédito     |
 
 ## 🔐 Autenticación
 
-Esta API valida tokens JWT emitidos por Supabase Auth (u otro emisor compatible) usando JWKS:
+La API utiliza **Supabase Auth** para autenticación mediante tokens JWT:
 
-- El servidor valida `issuer` `${SUPABASE_URL}/auth/v1`, `audience` `authenticated` y algoritmo ES256.
-- Todos los endpoints protegidos requieren header `Authorization: Bearer {JWT_TOKEN}`.
+- Todos los endpoints protegidos requieren el header: `Authorization: Bearer {JWT_TOKEN}`
+- El servidor valida automáticamente los tokens usando JWKS (JSON Web Key Set)
+- Validaciones: `issuer` = `${SUPABASE_URL}/auth/v1`, `audience` = `authenticated`, algoritmo ES256
+- El rol del usuario (`user_role`) se inyecta automáticamente en el JWT mediante custom claims
 
 **Ejemplo de llamada autenticada:**
 
@@ -163,23 +157,24 @@ curl -H "Authorization: Bearer eyJ0eXAiOiJKV1..." \
   http://localhost:8000/api/v1/profiles/me
 ```
 
-## 🗄️ Base de Datos
+## 🧰 Servicios Externos
 
-La API utiliza PostgreSQL mediante SQLModel/SQLAlchemy. En `db/` hay scripts SQL (tipos/tablas/políticas) que puedes usar como referencia o punto de partida.
+### Supabase
 
-Tablas principales del modelo actual (ver `app/models/*`):
-- `profiles` - Perfiles de usuarios
-- `companies` - Empresas (PyMEs)
-- `credit_applications` - Solicitudes de crédito
+La API utiliza los siguientes servicios de Supabase:
 
-## 👥 Equipo
+- **Supabase Auth**: Autenticación de usuarios con JWT
+- **Supabase Database**: PostgreSQL con políticas RLS (Row Level Security)
+- **Supabase Storage**: Almacenamiento de documentos (estados financieros, identificaciones, etc.)
 
-CreditosPYMES-NCG27
+### HelloSign (Dropbox Sign)
+
+Para la firma electrónica de documentos se integra con HelloSign:
+
+- Los documentos que requieren firma son enviados automáticamente a HelloSign
+- Los usuarios reciben notificaciones por email para firmar
+- El sistema recibe webhooks cuando se completa la firma
 
 ## 📄 Licencia
 
 Este proyecto está bajo la Licencia MIT. Ver [LICENSE](LICENSE) para más detalles.
-
----
-
-Para especificación técnica detallada de endpoints, esquemas y reglas de negocio, ver: [SPECIFICATION.md](./SPECIFICATION.md)
