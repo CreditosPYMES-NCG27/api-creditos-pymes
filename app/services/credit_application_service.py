@@ -47,6 +47,8 @@ class CreditApplicationService(BaseService):
         order: str = "desc",
     ) -> Paginated[CreditApplicationResponse]:
         role = await self.assert_role(user.sub)
+        exclude_status_list: list[CreditApplicationStatus] | None = None
+
         if role == UserRole.applicant:
             # Applicants solo ven sus propias aplicaciones
             user_company = await self.company_repo.get_by_user_id(UUID(user.sub))
@@ -69,6 +71,8 @@ class CreditApplicationService(BaseService):
                 raise ForbiddenError(
                     "Los operadores y administradores no pueden ver solicitudes en borrador"
                 )
+            # Excluir drafts de la query SQL
+            exclude_status_list = [CreditApplicationStatus.draft]
 
         items, total = await self.app_repo.list_applications(
             page=page,
@@ -77,14 +81,8 @@ class CreditApplicationService(BaseService):
             company_id=company_id,
             sort=sort,
             order=order,
+            exclude_status=exclude_status_list,
         )
-
-        # Filtrar drafts para operators/admins
-        if role in (UserRole.operator, UserRole.admin):
-            items = [
-                item for item in items if item.status != CreditApplicationStatus.draft
-            ]
-            total = len(items)
 
         meta = BaseService.create_pagination_meta(
             total=total,

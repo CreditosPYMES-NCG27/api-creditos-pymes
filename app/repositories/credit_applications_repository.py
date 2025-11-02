@@ -21,6 +21,7 @@ class CreditApplicationRepository:
         company_id: UUID | None = None,
         sort: str | None = None,
         order: str = "desc",
+        exclude_status: list[CreditApplicationStatus] | None = None,
     ) -> Tuple[Sequence[CreditApplication], int]:
         offset = (page - 1) * limit
         query = select(CreditApplication)
@@ -29,6 +30,8 @@ class CreditApplicationRepository:
             query = query.where(CreditApplication.status == status)
         if company_id:
             query = query.where(CreditApplication.company_id == company_id)
+        if exclude_status:
+            query = query.where(col(CreditApplication.status).not_in(exclude_status))
 
         if sort:
             sort_column = col(getattr(CreditApplication, sort, None))
@@ -48,6 +51,10 @@ class CreditApplicationRepository:
             count_query = count_query.where(CreditApplication.status == status)
         if company_id:
             count_query = count_query.where(CreditApplication.company_id == company_id)
+        if exclude_status:
+            count_query = count_query.where(
+                col(CreditApplication.status).not_in(exclude_status)
+            )
 
         total = (await self.session.execute(count_query)).scalar_one()
 
@@ -56,7 +63,6 @@ class CreditApplicationRepository:
             .scalars()
             .all()
         )
-
         return items, total
 
     async def create_application(

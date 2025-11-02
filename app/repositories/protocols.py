@@ -4,7 +4,12 @@ from datetime import datetime
 from typing import Any, Protocol, Sequence
 from uuid import UUID
 
-from app.core.enums import DocumentStatus, SignatureStatus, UserRole
+from app.core.enums import (
+    CreditApplicationStatus,
+    DocumentStatus,
+    SignatureStatus,
+    UserRole,
+)
 from app.models.company import Company
 from app.models.credit_application import CreditApplication
 from app.models.document import Document
@@ -55,6 +60,7 @@ class CreditApplicationRepositoryProtocol(Protocol):
         company_id: UUID | None = None,
         sort: str | None = None,
         order: str = "desc",
+        exclude_status: list[CreditApplicationStatus] | None = None,
     ) -> tuple[Sequence[CreditApplication], int]:
         """List credit applications with pagination and filters"""
         ...
